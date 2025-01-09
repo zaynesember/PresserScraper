@@ -1,0 +1,197 @@
+---
+title: "Scraper"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(rvest)
+library(stringr)
+```
+
+# Scraper
+
+```{r}
+# Helper function that recursively scrapes press releases across pages within
+# the given date range
+page_scraper <- function(page_index, link, home, start_date, end_date){
+  
+  # Give the user a message to check progress
+  cat("\r","Scraping from:", home, "   ", "pg:", page_index)
+  
+  # Add one day onto the start and end dates to ensure we don't miss any
+  # pressers if there are multiple in one day and one happens to be at top or
+  # bottom of the page
+  start_date <- as.character(as.Date(start_date) - 1)
+  end_date <- as.character(as.Date(end_date) + 1)
+  
+  # Data frame that will hold scraped pressers
+  pressers <- data.frame(name=c(), title=c(), body=c(), url=c())
+  
+  page_link <- paste0(link, "?page=", page_index)
+  
+  page <- read_html(page_link)
+  
+  # Get the dates from the press releases previewed on the page
+  dates <- page %>% html_nodes(".col-auto:nth-child(1)") %>% 
+      html_text() %>% str_trim()
+  
+  # Handle empty page case, i.e. when all the pages have been checked
+  if(length(dates)==0) return(pressers)
+  
+  # Format the dates
+  dates <- sapply(dates, function(x) as.character(strptime(x, f <- "%B %d, %Y", tz = "")))
+
+  if(head(dates, 1) > end_date & tail(dates, 1) > end_date){
+    # Haven't reached a page in our date range; recurse on the next page
+    return(rbind(pressers, page_scraper(page_index + 1, link, home, start_date, end_date)))
+  }
+  else if(head(dates, 1) < start_date){
+    # Base case: stop paginating
+    return(pressers)
+  }
+  else{
+    # Page has pressers in our date range--scrape them then recurse on next page
+    
+    # Get indexes for the dates within our range
+    desired_dates <- which(dates >= start_date & dates <= end_date)
+    
+    titles <- page %>% html_nodes(".font-weight-bold a") %>% html_text()
+    pr_links <- page %>% html_nodes(".font-weight-bold a") %>% 
+      html_attr("href") %>% paste0(gsub("media/press-releases/", "", home), .)
+
+    # Subset to only pressers within date range
+    titles <- titles[desired_dates]
+    pr_links <- pr_links[desired_dates]
+    
+    # Get the presser text
+    texts <- sapply(pr_links, 
+                    FUN=function(l){
+                      read_html(l) %>% 
+                        html_nodes(".evo-press-release__body") %>% 
+                        html_text() %>% str_trim
+                      })
+    
+    # Get the legislator's name and clean it
+    name <- page %>% html_nodes(xpath="/html/head/meta[2]") %>% 
+      html_attr("content")
+    name <- gsub("Representative", "", name)
+    name <- gsub("Congressman", "", name)
+    name <- str_trim(name)
+    
+    # Add everything to the data frame
+    pressers <- rbind(pressers, 
+                      data.frame(name=name, 
+                                 date=dates[desired_dates], 
+                                 title=titles, 
+                                 body=texts, url=pr_links))
+    
+    # Recurse on next page
+    return(rbind(pressers, page_scraper(page_index + 1, link, home, 
+                                        start_date, end_date)))
+  }
+}
+
+# Main scraping function
+scraper <- function(link, start_date, end_date){
+  
+  # Check if link is in valid format
+  if(!grepl("https://[a-zA-Z0-9\\-]+\\.house\\.gov", link)){
+    stop("Link is not of the form \"https://name.house.gov\"")
+  }
+  
+  if(start_date > end_date){
+    stop("Start date is after end date")
+  }
+  
+  # Data frame that will hold scraped pressers
+  pressers <- data.frame(name=c(), date=c(), title=c(), body=c(), url=c())
+  
+  template <- "A"
+  # TODO: Determine which template is being used
+  
+  if(template=="A"){
+    
+    landing <- paste0(link, "/media/press-releases")
+    
+    pressers <- rbind(pressers, 
+                      page_scraper(page_index=0, link=landing, home=link, 
+                                   start_date, end_date))
+    
+    row.names(pressers) <- NULL
+    
+    return(pressers)
+  }
+}
+
+# Example usage
+scraper(link="https://barrymoore.house.gov", 
+         start_date="2022-07-20",
+         end_date="2023-12-21") %>% View()
+
+scraper(link="https://biggs.house.gov", 
+         start_date="2023-07-20",
+         end_date="2023-12-21") %>% View()
+```
+
+
+# Template examples
+
+## Template A
+
+https://aderholt.house.gov/media-center/press-releases
+
+https://biggs.house.gov/media/press-releases
+
+https://barrymoore.house.gov/media/press-releases
+
+Stout code
+```{r}
+get_main = function(links){
+  press_page=read_html(links)
+  
+  press_info=press_page %>% html_nodes(".evo-press-release__body") %>% 
+    html_text() %>% str_trim
+  
+  return(press_info)
+}
+
+
+moorepr=data.frame()
+state="AL"
+district=2
+
+for(page_result in seq(from = 0 , to = 15, by = 1))
+{
+  link = paste0("https://barrymoore.house.gov/media/press-releases?page=", page_result)
+  
+  page = read_html(link)
+  
+  name = page %>% html_nodes(".font-weight-bold a") %>% html_text()
+  
+  links = page %>% html_nodes(".font-weight-bold a") %>% html_attr("href") %>% 
+    paste("https://barrymoore.house.gov", ., sep="")
+  
+  date = page %>% html_nodes(".col-auto:nth-child(1)") %>% html_text()
+  
+  prpage = sapply(links, FUN=get_main)
+  
+  moorepr = rbind(moorepr, data.frame(state, district, name, date, prpage))
+  
+  print(paste("Page:", page_result))  
+}
+
+write.csv(moorepr, "C:/Users/bestf/OneDrive/Desktop/Press Releases/mooreal2.csv")
+```
+
+
+
+## Template B
+
+https://mikerogers.house.gov/news/documentquery.aspx?DocumentTypeID=27
+
+https://gosar.house.gov/news/documentquery.aspx?DocumentTypeID=27
+
+## Template C
+
+https://grijalva.house.gov/category/congress_press_release/
