@@ -274,7 +274,7 @@ write.csv(kirkpatrickpraz2, "C:/Users/bestf/OneDrive/Desktop/Press Releases/kirk
 
 get_main=function(links) {
 press_page=read_html(links)
-press_info=press_page%>% html_nodes(".news-info__content") %>% html_text() %>%str_trim
+press_info=press_page %>% html_nodes(".news-info__content") %>% html_text() %>% str_trim
 return(press_info)}
 
 state="AZ"
@@ -291,7 +291,7 @@ page=read_html(link)
 
 name=page %>% html_nodes(".info-title") %>% html_text()
 links=page %>% html_nodes(".btn") %>% html_attr("href") %>% paste("", ., sep="")
-date=page %>%html_nodes(".info-date") %>% html_text()
+date=page %>% html_nodes(".info-date") %>% html_text()
 prpage=sapply(links, FUN=get_main)
 
 grijalvapr=rbind(grijalvapr, data.frame(state, district, name, date, prpage))
