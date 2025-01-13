@@ -608,9 +608,12 @@ TODO:
 - Templates: 
   - crane.house.gov date by date
   - stanton.house.gov
+    - should be template E but failing for some reason
   - https://hamadeh.house.gov
     - new member not enough pressers to understand pagination
   - https://kiley.house.gov
+    - Having trouble parsing to get date
+    - Name: read_html(link) %>% html_nodes(xpath="/html/head/meta[3]") %>% html_attr("content")
   - https://mikethompson.house.gov
   - https://mcclintock.house.gov
   - https://pelosi.house.gov
