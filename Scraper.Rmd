@@ -15,10 +15,10 @@ library(stringr)
 # Helper function that recursively scrapes press releases across pages within
 # the given date range
 page_scraper <- function(page_index, link, home, start_date, end_date,
-                         template){
-  
+                         template, debug=F){
+
   # Give the user a message to check progress
-  cat("\r","Scraping from:", home, "   ", "pg:", page_index)
+  cat("\014","Scraping from:", home, "   ", "pg:", page_index)
   
   # Add one day onto the start and end dates to ensure we don't miss any
   # pressers if there are multiple in one day and one happens to be at top or
@@ -99,7 +99,7 @@ page_scraper <- function(page_index, link, home, start_date, end_date,
       
       # Recurse on next page
       return(rbind(pressers, page_scraper(page_index + 1, link, home, 
-                                          start_date, end_date, template="A")))
+                                          start_date, end_date, template="A", debug=debug)))
     }
   }
   else if(template=="B"){
@@ -119,7 +119,7 @@ page_scraper <- function(page_index, link, home, start_date, end_date,
     if(head(dates, 1) > end_date & tail(dates, 1) > end_date){
       # Haven't reached a page in our date range; recurse on the next page
       return(rbind(pressers, page_scraper(page_index + 1, link, home, 
-                                          start_date, end_date, template="B")))
+                                          start_date, end_date, template="B", debug=debug)))
     }
     else if(head(dates, 1) < start_date){
       # Base case: stop paginating
@@ -170,7 +170,7 @@ page_scraper <- function(page_index, link, home, start_date, end_date,
       
       # Recurse on next page
       return(rbind(pressers, page_scraper(page_index + 1, link, home, 
-                                          start_date, end_date, template="B")))
+                                          start_date, end_date, template="B", debug=debug)))
     }
   }
   else if(template=="C"){
@@ -194,7 +194,7 @@ page_scraper <- function(page_index, link, home, start_date, end_date,
     if(head(dates, 1) > end_date & tail(dates, 1) > end_date){
       # Haven't reached a page in our date range; recurse on the next page
       return(rbind(pressers, page_scraper(page_index + 1, link, home, 
-                                          start_date, end_date, template="C")))
+                                          start_date, end_date, template="C", debug=debug)))
     }
     else if(head(dates, 1) < start_date){
       # Base case: stop paginating
@@ -207,7 +207,7 @@ page_scraper <- function(page_index, link, home, start_date, end_date,
       desired_dates <- which(dates >= start_date & dates <= end_date)
       
       titles <- page %>% html_nodes(".info-title") %>% html_text()
-      pr_links <- page %>% html_nodes(".btn") %>% html_attr("href") %>% paste(home, ., sep="")
+      pr_links <- page %>% html_nodes(".btn") %>% html_attr("href")
   
       # Subset to only pressers within date range
       titles <- titles[desired_dates]
@@ -245,7 +245,7 @@ page_scraper <- function(page_index, link, home, start_date, end_date,
       
       # Recurse on next page
       return(rbind(pressers, page_scraper(page_index + 1, link, home, 
-                                          start_date, end_date, template="C")))
+                                          start_date, end_date, template="C", debug=debug)))
     }
   }
   else if(template=="D"){
@@ -269,7 +269,7 @@ page_scraper <- function(page_index, link, home, start_date, end_date,
     if(head(dates, 1) > end_date & tail(dates, 1) > end_date){
       # Haven't reached a page in our date range; recurse on the next page
       return(rbind(pressers, page_scraper(page_index + 1, link, home, 
-                                          start_date, end_date, template="D")))
+                                          start_date, end_date, template="D", debug=debug)))
     }
     else if(head(dates, 1) < start_date){
       # Base case: stop paginating
@@ -330,13 +330,94 @@ page_scraper <- function(page_index, link, home, start_date, end_date,
       
       # Recurse on next page
       return(rbind(pressers, page_scraper(page_index + 1, link, home, 
-                                          start_date, end_date, template="D")))
+                                          start_date, end_date, template="D", debug=debug)))
+    }
+  }
+  else if(template=="E"){
+    
+    # Template E doesn't play nice with page index of 0
+    if(page_index==0) page_index <- 1
+    
+    page_link <- paste0(link, "?page=", page_index)
+    
+    page <- read_html(page_link)
+    
+    # Get the dates from the press releases previewed on the page
+    dates <- page %>% html_nodes(".recordListDate") %>% 
+      html_text() %>% str_trim()
+    
+    # Handle empty page case, i.e. when all the pages have been checked
+    if(length(dates)==0) return(pressers)
+    
+    # Format the dates
+    dates <- sapply(dates, 
+                    function(x) as.character(
+                      strptime(x, f <- "%m/%d/%y", tz = "")))
+  
+    if(head(dates, 1) > end_date & tail(dates, 1) > end_date){
+      # Haven't reached a page in our date range; recurse on the next page
+      return(rbind(pressers, page_scraper(page_index + 1, link, home, 
+                                          start_date, end_date, template="E", debug=debug)))
+    }
+    else if(head(dates, 1) < start_date){
+      # Base case: stop paginating
+      return(pressers)
+    }
+    else{
+      # Page has pressers in our date range--scrape them then recurse on next page
+      
+      # Get indexes for the dates within our range
+      desired_dates <- which(dates >= start_date & dates <= end_date)
+      
+      pr_links <- page %>% html_nodes(".ContentGrid") %>% html_attr("href") %>% 
+        paste0(home,.)
+      
+      # Subset to only pressers within date range
+      pr_links <- pr_links[desired_dates]
+      
+      # Get the presser titles
+      titles <- page %>% html_nodes(".ContentGrid") %>% html_text()
+      
+      # Get the presser text
+      texts <- sapply(pr_links, 
+                      FUN=function(l){
+                        read_html(l) %>% 
+                          html_nodes(".post-content") %>% 
+                          html_text() %>% str_trim
+                        })
+      
+      # Get the legislator's name and clean it
+      name <- read_html(home) %>% 
+        html_nodes("head > title:nth-child(2)") %>% 
+        html_text() %>% str_trim()
+      name <- gsub("U.S. Representative", "", name)
+      name <- gsub("Representative", "", name)
+      name <- gsub("U.S. Congressman", "", name)
+      name <- gsub("U.S. Congresswoman", "", name)
+      name <- gsub("Congressman", "", name)
+      name <- gsub("Congresswoman", "", name)
+      name <- gsub("Home - ", "", name)
+      name <- gsub("\\s*,?\\s*(D\\.D\\.S\\.|PhD|M\\.D\\.|M\\.Sc\\.|LL\\.M\\.|
+                   J\\.D\\.|B\\.Sc\\.|D\\.Phil\\.|Ed\\.D\\.|M\\.Eng\\.|\\w{1,3}
+                   \\.\\w{1,3}\\.)", "", name) # Remove degrees but keep things like Jr.
+      name <- str_trim(name)
+      
+      # Add everything to the data frame
+      pressers <- rbind(pressers, 
+                        data.frame(name=name, 
+                                   date=dates[desired_dates], 
+                                   title=titles[desired_dates], 
+                                   body=texts, url=pr_links))
+      
+      # Recurse on next page
+      return(rbind(pressers, page_scraper(page_index + 1, link, home, 
+                                          start_date, end_date, template="E", debug=debug)))
     }
   }
 }
 
 # Main scraping function
-scraper <- function(link, start_date, end_date){
+scraper <- function(link, start_date, end_date, debug=F){
   
   # Check if link is in valid format, date range is valid
   if(!grepl("https://[a-zA-Z0-9\\-]+\\.house\\.gov", link)){
@@ -346,6 +427,9 @@ scraper <- function(link, start_date, end_date){
   if(start_date > end_date){
     stop("Start date is after end date")
   }
+  
+  # Sanitize input by removing extra forward slash at end of URL if present
+  if(substr(link, nchar(link), nchar(link))=="/") link <- substr(link, 1, nchar(link)-1)
   
   # Data frame that will hold scraped pressers
   pressers <- data.frame(name=c(), date=c(), title=c(), body=c(), url=c())
@@ -358,41 +442,47 @@ scraper <- function(link, start_date, end_date){
                 silent=T) # Try A
   page_B <- try(read_html(paste0(link, "/news/documentquery.aspx?DocumentTypeID=27")), 
                 silent=T) # Try B
-  page_C <- try(read_html(paste0(link, "/category/congress_press_release/")) , 
+  page_C <- try(read_html(paste0(link, "/category/congress_press_release/")), 
                 silent=T) # Try C
-  page_D <- try(read_html(paste0(link, "/media-center/press-releases")) , 
-                silent=T) # Try C
+  page_D <- try(read_html(paste0(link, "/media-center/press-releases")), 
+                silent=T) # Try D
+  page_E <- try(read_html(paste0(link, "/press-releases")), 
+                silent=T) # Try E
   
-  if(sum(length(page_A), length(page_B), 
-         length(page_C), length(page_D)) == 4){ # Check if all known templates throw errors
-    if(class(page_A)=="try-error" & 
-       class(page_B)=="try-error" & 
-       class(page_C)=="try-error" &
-       class(page_D)=="try-error") template <- NA
-  }
-  else if(class(page_A)[1]=="try-error"){ # Check if A throws an error meaning it's B, D, or unknown
-    if(class(page_B)[1]!="try-error"){ # Check if B throws an error
-      if(class(try(page_B %>% 
-                   html_nodes("#ctl00_PageLink") %>% html_text(), 
-                   silent=T))[1]!="try-error") template <- "B" # Confirm it's B
-    }
-    else if(page_D %>% html_nodes(".display-4") %>% # If B throws an error, confirm it's D
-            html_text() %>% str_trim()=="Press Releases"){
-      template <- "D"
-    }
-  }
-  else if(identical(character(0), page_A %>% html_nodes(".display-4") %>% 
-           html_text())){ # Check if A gives a blank page, meaning it's likely C
-    if(page_C %>% html_nodes(".page-title") %>% 
-       html_text() %>% str_trim()=="Press Release") template <- "C" # Confirm it's C
-  }
-  else if (page_A %>% html_nodes(".display-4") %>% 
-           html_text() %>% str_trim()=="Press Releases") template <- "A" # Otherwise confirm it's A
+  page_lengths <- c(length(page_A), length(page_B), length(page_C), 
+                    length(page_D), length(page_E))
   
-  # With the template determined it's time to start scraping
+  # Create a matrix with known lengths of each page template when the other
+  # templates' landings are applied
+  # When the call to read_html fails (403 or 404 error) it returns a length 1 error object
+  # but otherwise the webpage is length 2
+  # Rows are labelled with the actual page template
+  # Columns are labelled with the tried page template
+  length_matrix <- matrix(nrow=6, ncol=5,
+                          data=c(2, 1, 1, 1, 1,
+                                 1, 2, 1, 1, 1,
+                                 1, 2, 1, 2, 1,
+                                 2, 1, 2, 2, 2,
+                                 1, 1, 1, 2, 1,
+                                 1, 1, 1, 1, 2),
+                          dimnames=list(c("A", "B", "B", "C", "D", "E"), 
+                                        c("A", "B", "C", "D", "E")),
+                          byrow=T
+  )
   
-  if(is.na(template)) stop(paste0("Unknown template or bad URL for ", link)) # If none match, throw an error
-  else if(template=="A"){
+  # Compare each row of matrix to the observed page lengths
+  template <- rownames(length_matrix)[
+    which(
+      apply(length_matrix, 1, function(row) all(row == page_lengths))
+    )
+  ]
+  
+  # Throw an error if no rows match
+  if(length(template) == 0) stop(paste0("Unknown template or bad URL for ", link)) 
+  
+  
+  # With the template determined we can start scraping
+  if(template=="A"){
     
     # Build the landing page link
     landing <- paste0(link, "/media/press-releases")
@@ -400,7 +490,8 @@ scraper <- function(link, start_date, end_date){
     # Do the scraping
     pressers <- rbind(pressers, 
                       page_scraper(page_index=0, link=landing, home=link, 
-                                   start_date, end_date, template="A"))
+                                   start_date, end_date, template="A",
+                                   debug=debug))
   }
   else if(template=="B"){
     
@@ -410,7 +501,8 @@ scraper <- function(link, start_date, end_date){
     # Do the scraping
     pressers <- rbind(pressers, 
                       page_scraper(page_index=0, link=landing, home=link, 
-                                   start_date, end_date, template="B"))
+                                   start_date, end_date, template="B",
+                                   debug=debug))
   }
   else if(template=="C"){
     # Build the landing page link
@@ -419,7 +511,8 @@ scraper <- function(link, start_date, end_date){
     # Do the scraping
     pressers <- rbind(pressers, 
                       page_scraper(page_index=0, link=landing, home=link, 
-                                   start_date, end_date, template="C"))
+                                   start_date, end_date, template="C",
+                                   debug=debug))
   }
   else if(template=="D"){
     # Build the landing page link
@@ -428,7 +521,18 @@ scraper <- function(link, start_date, end_date){
     # Do the scraping
     pressers <- rbind(pressers, 
                       page_scraper(page_index=0, link=landing, home=link, 
-                                   start_date, end_date, template="D"))
+                                   start_date, end_date, template="D",
+                                   debug=debug))
+  }
+  else if(template=="E"){
+    # Build the landing page link
+    landing <- paste0(link, "/press-releases")
+    
+    # Do the scraping
+    pressers <- rbind(pressers, 
+                      page_scraper(page_index=0, link=landing, home=link, 
+                                   start_date, end_date, template="E",
+                                   debug=debug))
   }
   
   row.names(pressers) <- NULL
@@ -451,15 +555,15 @@ scraper <- function(link, start_date, end_date){
 # scraper(link="https://gosar.house.gov",
 #          start_date="2023-07-20",
 #          end_date="2023-10-21") #%>% View()
-# 
+
 # scraper(link="https://mikerogers.house.gov",
 #          start_date="2023-07-20",
 #          end_date="2023-10-21")
 
 ## Template C
-# scraper(link="https://grijalva.house.gov",
-#          start_date="2023-07-20",
-#          end_date="2023-10-21")
+scraper(link="https://grijalva.house.gov",
+         start_date="2023-07-20",
+         end_date="2023-10-21")
 
 ## Template D
 # scraper(link="https://aderholt.house.gov",
@@ -467,7 +571,9 @@ scraper <- function(link, start_date, end_date){
 #          end_date="2024-10-21")
 
 ## Template E
-"https://sewell.house.gov/"
+# scraper(link="https://sewell.house.gov/",
+#          start_date="2024-07-20",
+#          end_date="2024-10-21")
 
 ## Unknown Template/Bad URL
 # scraper(link="https://obama.house.gov",
@@ -485,10 +591,32 @@ websites <- read_html("https://www.house.gov/representatives") %>%
 
 # Test case: scraping all members' press releases since December 1
 ```{r}
-sapply(websites, FUN=scraper, start_date="2024-12-01", end_date="2025-01-09")
+sapply(websites[which(!websites %in% c("https://crane.house.gov", 
+                                       "https://stanton.house.gov",
+                                       "https://hamadeh.house.gov",
+                                       "https://kiley.house.gov",
+                                       "https://mikethompson.house.gov",
+                                       "https://mcclintock.house.gov",
+                                       "https://pelosi.house.gov",
+                                       "https://simon.house.gov",
+                                       "https://gray.house.gov",
+                                       "https://kevinmullin.house.gov"))], 
+       FUN=scraper, start_date="2024-12-01", end_date="2025-01-09", debug=T)
 ```
 
 TODO:
+- Templates: 
+  - crane.house.gov date by date
+  - stanton.house.gov
+  - https://hamadeh.house.gov
+    - new member not enough pressers to understand pagination
+  - https://kiley.house.gov
+  - https://mikethompson.house.gov
+  - https://mcclintock.house.gov
+  - https://pelosi.house.gov
+  - https://simon.house.gov
+  - https://gray.house.gov
+  - https://kevinmullin.house.gov 
 - Add better error handling for scraping process
 
 # Template examples
@@ -591,3 +719,8 @@ https://aderholt.house.gov
 
 https://sewell.house.gov/
 
+
+## Template F
+
+https://crane.house.gov/
+Note: was missing from Stout code
