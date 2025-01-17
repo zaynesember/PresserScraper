@@ -2,8 +2,10 @@ library(tidyverse)
 library(rvest)
 library(stringr)
 
+scraper(link="https://nunn.house.gov", start_date="2024-12-01", end_date="2024-12-31", debug=T)
 
-link <- "https://mikethompson.house.gov"
+
+link <- "https://nunn.house.gov"
 
 page_A <- try(read_html(paste0(link, "/media/press-releases")), 
               silent=T) # Try A
@@ -16,33 +18,32 @@ page_D <- try(read_html(paste0(link, "/media-center/press-releases")),
 page_E <- try(read_html(paste0(link, "/press-releases")), 
               silent=T) # Try E
 page_F <- try(read_html(paste0(link, "/newsroom/press-releases")), 
-              silent=T) # Try E
+              silent=T) # Try F
+page_G <- try(read_html(paste0(link, "/news/press-releases")), 
+              silent=T) # Try G
+page_H <- try(read_html(paste0(link, "/category/press_release")), 
+              silent=T) # Try H
+page_I <- try(read_html(paste0(link, "/category/press-releases")), 
+              silent=T) # Try I
+page_J <- try(read_html(paste0(link, "/press")), 
+              silent=T) # Try J
 
-page_lengths <- c(length(page_A), length(page_B), length(page_C), 
-                  length(page_D), length(page_E), length(page_F))
+c(length(page_A), length(page_B), length(page_C), 
+  length(page_D), length(page_E), length(page_F),
+  length(page_G), length(page_H), length(page_I),
+  length(page_J))
 
-page_lengths
+page_A %>% html_nodes(".published") %>% 
+  html_text() %>% str_trim()
 
-# Page F
+read_html("https://juliabrownley.house.gov/category/news/press-releases/")
 
-# Name
-read_html(link) %>% html_nodes(xpath="/html/head/meta[2]") %>% html_attr("content")
+identical(read_html("https://nunn.house.gov/category/press-releases/page/5/") %>% html_nodes(".entry-title a") %>% html_text(),
+  read_html("https://nunn.house.gov/category/press-releases/page/6/") %>% html_nodes(".entry-title a") %>% html_text())
 
-# Dates
-dates <- page_F %>% html_nodes(xpath="//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"col-auto\", \" \" ))]") %>% 
-  html_text() %>% str_trim
+identical(read_html("https://nunn.house.gov/media/press-releases/page/5/") %>% html_nodes(".entry-title a") %>% html_text(),
+  read_html("https://nunn.house.gov/media/press-releases/page/6/") %>% html_nodes(".entry-title a") %>% html_text())
 
-dates[c(T, F)]
 
-# Links
-page_F %>% 
-  html_nodes(".font-weight-bold a") %>% 
-  html_attr("href")
-
-# Titles
-# need to work more on to avoid getting extra junk
-titles <- page_F %>% 
-  html_nodes(".font-weight-bold") %>% html_text() %>% str_trim
-
-titles
-
+read_html("https://juliabrownley.house.gov/category/press-releases/page/5/") %>% html_nodes(".entry-title a") %>% html_text() ==
+  read_html("https://juliabrownley.house.gov/category/press-releases/page/6/") %>% html_nodes(".entry-title a") %>% html_text()
