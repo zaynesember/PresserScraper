@@ -2,10 +2,11 @@ library(tidyverse)
 library(rvest)
 library(stringr)
 
-scraper(link="https://nunn.house.gov", start_date="2024-12-01", end_date="2024-12-31", debug=T)
+scraper(link="https://comer.house.gov", start_date="2024-12-01", end_date="2024-12-31", page_limit=10, debug=T)
+# type E but with press-release
 
 
-link <- "https://nunn.house.gov"
+link <- "https://comer.house.gov"
 
 page_A <- try(read_html(paste0(link, "/media/press-releases")), 
               silent=T) # Try A
@@ -33,17 +34,5 @@ c(length(page_A), length(page_B), length(page_C),
   length(page_G), length(page_H), length(page_I),
   length(page_J))
 
-page_A %>% html_nodes(".published") %>% 
+read_html("https://comer.house.gov/press-release?page=1") %>% html_nodes(".ContentGrid") %>% 
   html_text() %>% str_trim()
-
-read_html("https://juliabrownley.house.gov/category/news/press-releases/")
-
-identical(read_html("https://nunn.house.gov/category/press-releases/page/5/") %>% html_nodes(".entry-title a") %>% html_text(),
-  read_html("https://nunn.house.gov/category/press-releases/page/6/") %>% html_nodes(".entry-title a") %>% html_text())
-
-identical(read_html("https://nunn.house.gov/media/press-releases/page/5/") %>% html_nodes(".entry-title a") %>% html_text(),
-  read_html("https://nunn.house.gov/media/press-releases/page/6/") %>% html_nodes(".entry-title a") %>% html_text())
-
-
-read_html("https://juliabrownley.house.gov/category/press-releases/page/5/") %>% html_nodes(".entry-title a") %>% html_text() ==
-  read_html("https://juliabrownley.house.gov/category/press-releases/page/6/") %>% html_nodes(".entry-title a") %>% html_text()

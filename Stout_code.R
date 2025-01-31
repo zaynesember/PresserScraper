@@ -13201,12 +13201,6 @@ moorewi4=rbind(moorewi4, data.frame(state, district, name, date, prpage))
 View(moorewi4)
 write.csv(moorewi4, "C:/Users/bestf/OneDrive/Desktop/Press Releases/moorewi4.csv")
 
-
-https://fitzgerald.house.gov/media/press-releases?page=
-
-
-
-
 get_main=function(links) {
 press_page=read_html(links)
 press_info=press_page%>% html_nodes(".evo-press-release__body") %>% html_text() %>%str_trim
