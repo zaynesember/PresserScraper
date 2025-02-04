@@ -780,6 +780,15 @@ scraper <- function(link, start_date, end_date, name=NA, page_limit=1000, debug=
     )
   ]
   
+  # TODO: Come up with a better method
+  Etype2 <- F
+  if(length(template) == 0){
+    if(length(try(read_html(paste0(link, "/press-release")), silent=T))!=1){
+      template <- "E"
+      Etype2 < T
+    }
+  }
+  
   if(debug) print(paste0("Template: ", template))
   
   # Throw an error if no rows match
@@ -832,7 +841,7 @@ scraper <- function(link, start_date, end_date, name=NA, page_limit=1000, debug=
   }
   else if(template=="E"){
     # Build the landing page link
-    landing <- paste0(link, "/press-releases")
+    landing <- ifelse(Etype2, paste0(link, "/press-release"), paste0(link, "/press-releases"))
     
     # Do the scraping
     pressers <- rbind(pressers, 
@@ -903,7 +912,9 @@ scraper <- function(link, start_date, end_date, name=NA, page_limit=1000, debug=
   
   return(pressers)
 }
+```
 
+```{r}
 # Example usage
 
 ## Template A
@@ -1166,3 +1177,70 @@ mikethompson.house.gov
 
 ## Template G
 pelosi.house.gov
+
+# Scraper v2
+
+```{r}
+presser_finder <- function(link, debug=F){
+  page <- read_html(link)
+  
+  # XPath explanation:
+  # - //a selects all <a> elements.
+  # - translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') converts the text to lowercase.
+  # - The first condition checks if the text contains "press release".
+  # - The second condition checks if the text contains "news" but not "newsletter".
+  # - The and @href part ensures that only nodes with an href attribute are selected.
+  link_node <- html_node(
+    page,
+    xpath = "//a[
+    (
+      contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'press release')
+      or
+      (
+        contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'news')
+        and
+        not(contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'newsletter'))
+      )
+    )
+    and @href
+  ]"
+  )
+  
+  if (!is.null(link_node)) {
+    href_value <- html_attr(link_node, "href")
+  } else {
+    message("No relevant link found.")
+  }
+  
+  return(href_value)
+}
+
+scraper <- function(link, start_date, end_date, name=NA, page_limit=1000, debug=F){
+  
+  # Check if link has https:// at the start, if not add it
+  if(substr(link, 1, 8)!="https://") link <- paste0("https://", link)
+  
+  # Check if link is in valid format and date range is valid
+  if(!grepl("https://[a-zA-Z0-9\\-]+\\.house\\.gov", link)){
+    stop("Link is not of the form \"{name}.house.gov\" or \"https://{name}.house.gov\"")
+  }
+  
+  if(start_date > end_date){
+    stop("Start date is after end date")
+  }
+  
+  # Sanitize input by removing extra forward slash at end of URL if present
+  if(substr(link, nchar(link), nchar(link))=="/") link <- substr(link, 1, nchar(link)-1)
+  
+  # Data frame that will hold scraped pressers
+  pressers <- data.frame(date=c(), title=c(), body=c(), url=c())
+  
+  # Find the link for the press release page
+  pressers_link <- presser_finder(link, debug=debug)
+  
+  if(is.na(link)) stop(paste0("Press release page could not be found for ", link))
+  
+}
+```
+
+

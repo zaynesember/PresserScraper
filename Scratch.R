@@ -2,6 +2,11 @@ library(tidyverse)
 library(rvest)
 library(stringr)
 
+
+# IDEA FOR IMPROVED LOGIC:
+#   Compile list of dropdown elements to directly get link to the press release page
+#   Compile list of possible date, title, link, and text elements, try each
+
 scraper(link="https://comer.house.gov", start_date="2024-12-01", end_date="2024-12-31", page_limit=10, debug=T)
 # type E but with press-release
 
@@ -36,3 +41,94 @@ c(length(page_A), length(page_B), length(page_C),
 
 read_html("https://comer.house.gov/press-release?page=1") %>% html_nodes(".ContentGrid") %>% 
   html_text() %>% str_trim()
+
+
+link %>% read_html() %>% html_nodes(".nav_media > ul:nth-child(2) > li:nth-child(1) > a:nth-child(1)") %>% html_attr("href")
+
+"https://simon.house.gov/" %>% read_html() %>% 
+  html_nodes("#main-menu-link-contentf4653798-f140-476b-9deb-8e6f1ad7984e > a:nth-child(1)") %>% html_attr("href")
+
+
+read_html("https://simon.house.gov/")
+
+
+# GPT CODE
+
+# Replace with your target URL
+url <- "https://schweikert.house.gov"
+page <- read_html(url)
+
+# XPath explanation:
+# - //a selects all <a> elements.
+# - translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') converts the text to lowercase.
+# - The first condition checks if the text contains "press release".
+# - The second condition checks if the text contains "news" but not "newsletter".
+# - The and @href part ensures that only nodes with an href attribute are selected.
+link_node <- html_node(
+  page,
+  xpath = "//a[
+    (
+      contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'press release')
+      or
+      (
+        contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'news')
+        and
+        not(contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'newsletter'))
+      )
+    )
+    and @href
+  ]"
+)
+
+# Extract and print the href attribute if a matching node is found
+if (!is.null(link_node)) {
+  href_value <- html_attr(link_node, "href")
+  print(href_value)
+} else {
+  message("No relevant link found.")
+}
+
+presser_finder <- function(link){
+  page <- read_html(link)
+  
+  # XPath explanation:
+  # - //a selects all <a> elements.
+  # - translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') converts the text to lowercase.
+  # - The first condition checks if the text contains "press release".
+  # - The second condition checks if the text contains "news" but not "newsletter".
+  # - The and @href part ensures that only nodes with an href attribute are selected.
+  link_node <- html_node(
+    page,
+    xpath = "//a[
+    (
+      contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'press release')
+      or
+      (
+        contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'news')
+        and
+        not(contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'newsletter'))
+      )
+    )
+    and @href
+  ]"
+  )
+  
+  if (!is.null(link_node)) {
+    href_value <- html_attr(link_node, "href")
+    #print(href_value)
+  } else {
+    message("No relevant link found.")
+  }
+  
+  return(href_value)
+}
+
+# TODO: write code to check whether full URL is provided or not
+
+directories <- data.frame(domain=c(), directory=c())
+
+for(w in websites){
+  directories <- bind_rows(directories, data.frame(domain=c(w), directory=c(presser_finder(w))))
+}
+
+
