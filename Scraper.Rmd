@@ -1240,6 +1240,34 @@ scraper <- function(link, start_date, end_date, name=NA, page_limit=1000, debug=
   
   if(is.na(link)) stop(paste0("Press release page could not be found for ", link))
   
+  # TODO: check if pressers_link is full URL or just the end
+  
+  # TODO: Loop through possible pagination formats, determine which works including starting page index
+  
+  # TODO: Loop through possible date nodes
+  
+  # TODO: Check format of dates
+  
+  # TODO: Check format of titles
+  
+  # TODO: Check format of pr links
+  
+  # TODO: Check format of texts
+  
+  # TODO: Pass formats to recursive helper function
+  
+  # TODO: Return the pressers
+  
+}
+
+text_scraper <- function(page_index, link, home, start_date, end_date,
+                         date_node, date_node_type,
+                         title_node, title_node_type,
+                         pr_links_node, pr_links_node_type,
+                         text_node, text_node_type,
+                         page_string, clean_text=F, # TODO: add option to have clean and raw text
+                         debug=F, page_limit=500){
+  
 }
 ```
 
