@@ -7,6 +7,7 @@ output: html_notebook
 library(tidyverse)
 library(rvest)
 library(stringr)
+library(readxl)
 
 # Helper function to clean the legislator's name
 # NO LONGER NEEDED
@@ -25,6 +26,52 @@ name_cleaner <- function(name){
   
   return(name)
 }
+
+# Helper function to detect date formats a la ChatGPT
+detect_date_format <- function(date_strings) {
+  # A list of candidate formats (date-only and datetime variants)
+  candidate_formats <- c(
+    "%Y-%m-%dT%H:%M:%S",   # ISO 8601 with T separator
+    "%Y-%m-%d %H:%M:%S",   # Common datetime with space separator
+    "%Y-%m-%d",            # ISO date
+    "%d/%m/%Y %H:%M:%S",   # Day/Month/Year with datetime
+    "%d/%m/%Y",            # Day/Month/Year
+    "%m/%d/%Y %H:%M:%S",   # Month/Day/Year with datetime
+    "%m/%d/%Y",            # Month/Day/Year
+    "%Y/%m/%d %H:%M:%S",   # Year/Month/Day with datetime using slash
+    "%Y/%m/%d",            # Year/Month/Day with slash
+    
+    # Full month name formats like "September 23, 2020"
+    "%B %d, %Y",
+    "%B %d, %Y %H:%M:%S",
+
+    # Abbreviated month name formats like "Sep 23, 2021" (without a period)
+    "%b %d, %Y",
+    "%b %d, %Y %H:%M:%S",
+    
+    # Abbreviated month name with a period: "Sep. 23, 2021"
+    "%b. %d, %Y",
+    "%b. %d, %Y %H:%M:%S"
+  )
+  
+  # For each candidate, count how many strings can be parsed (ignoring warnings)
+  valid_counts <- sapply(candidate_formats, function(fmt) {
+    parsed <- suppressWarnings(strptime(date_strings, format = fmt))
+    sum(!is.na(parsed))
+  })
+  
+  # If none of the formats yield any valid dates, return NA
+  if (all(valid_counts == 0)) {
+    return(NA)
+  }
+  
+  # Otherwise, choose the candidate format with the most valid parses.
+  # In case of ties, which.max() returns the first maximum.
+  best_index <- which.max(valid_counts)
+  candidate_formats[best_index]
+}
+
+
 ```
 
 ```{r}
@@ -1240,11 +1287,73 @@ scraper <- function(link, start_date, end_date, name=NA, page_limit=1000, debug=
   
   if(is.na(link)) stop(paste0("Press release page could not be found for ", link))
   
-  # TODO: check if pressers_link is full URL or just the end
+  # Build the URL for the press releases page
+  if (!grepl("^https?://", pressers_link)) {
+    # Remove trailing slashes from link
+    base_link <- sub("/+$", "", link)
+    
+    # Remove leading slashes from pressers_link
+    relative_link <- sub("^/+", "", pressers_link)
+    
+    # Combine with a single slash between them
+    pressers_link <- paste0(base_link, "/", relative_link)
+  }
   
-  # TODO: Loop through possible pagination formats, determine which works including starting page index
+  # Read in our webpage elements to look through
+  nodes <- read_excel("nodes.xlsx")
   
-  # TODO: Loop through possible date nodes
+  pagination <- nodes %>% filter(element=="page link")
+  
+  page_index_start <- NA
+  page_string <- NA
+  
+  # Loop through press release page link formats until one works, then determine
+  # if the pagination starts at 0 or 1
+  for(p in pagination$string){
+    page0 <- try(read_html(paste0(pressers_link, p, 0)))
+    page1 <- try(read_html(paste0(pressers_link, p, 1)))
+    
+    # A non-blank page will have length > 1
+    if(length(page0)==1 & length(page0)==1) next
+    else if(length(page1)==2){ page_index_start <- 1; page_string <- p; break }
+    else if(length(page0)==2){ page_index_start <- 0; page_string <- p; break }
+  }
+  
+  if(is.na(page_string)) stop(paste0("Pagination failed for ", link))
+  
+  # Build the press release page URL
+  pressers_link <- paste0(pressers_link, page_string, page_index_start)
+  
+  date_nodes <- nodes %>% filter(element=="dates")
+  
+  date_node <- NA
+  date_format <- NA
+  
+  # Loop through date notes until one works
+  for(i in 1:length(date_nodes)){
+    
+    # Case when date can be found with xpath
+    if(date_nodes$type[i]=="xpath"){
+      date_attempt <- try(read_html(pressers_link) %>% 
+                          html_nodes(xpath=date_nodes$string[i]) %>% html_text() %>% str_trim())
+    }
+    # Case when date can be found with CSS
+    else{
+      date_attempt <- try(read_html(pressers_link) %>% 
+                            html_nodes(date_nodes$string[i]) %>% html_text() %>% str_trim())
+    }
+    if(length(date_attempt)==1) next
+    else{
+      date_format <- detect_date_format(date_attempt)
+      
+      print(date_format)
+      
+      if(is.na(date_format)) next
+      else date_node <- date_nodes$string[i]; break 
+    }
+  }
+  
+  if(is.na(date_format)) stop(paste0("No valid date node found for ", link))
   
   # TODO: Check format of dates
   
@@ -1258,6 +1367,8 @@ scraper <- function(link, start_date, end_date, name=NA, page_limit=1000, debug=
   
   # TODO: Return the pressers
   
+  return(pressers_link)
+  
 }
 
 text_scraper <- function(page_index, link, home, start_date, end_date,
@@ -1266,9 +1377,19 @@ text_scraper <- function(page_index, link, home, start_date, end_date,
                          pr_links_node, pr_links_node_type,
                          text_node, text_node_type,
                          page_string, clean_text=F, # TODO: add option to have clean and raw text
-                         debug=F, page_limit=500){
-  
-}
+                         debug=F, page_limit=500){}
+
+scraper(link="barrymoore.house.gov", start_date="2024-12-01", end_date="2024-12-31", name=NA, page_limit=1000, debug=T)
 ```
 
+```{r}
+# No date nodes working, .col-auto:nth-child(1) only gives one date
+scraper(link="barrymoore.house.gov", start_date="2024-12-01", end_date="2024-12-31", name=NA, page_limit=1000, debug=T)
+
+
+read_html("https://barrymoore.house.gov/media/press-releases?page=1") %>% html_nodes(".col-auto:nth-child(1)") %>% html_text() %>% str_trim()
+
+```
+
+"September 11, 2024" "September 10, 2024" "August 28, 2024"
 

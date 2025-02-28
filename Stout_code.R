@@ -5880,7 +5880,7 @@ prpagedate=sapply(links, FUN=get_maindate)
 murphyfl7pr =rbind(murphyfl7pr, data.frame(state, district, name, prpagedate, prpage))
 }
 View(murphyfl7pr)
-write.csv(murphyfl7pr, “C:/Users/bestf/OneDrive/Desktop/Press Releases/murphyfl7pr.csv")
+write.csv(murphyfl7pr, "C:/Users/bestf/OneDrive/Desktop/Press Releases/murphyfl7pr.csv")
 
 
 get_main=function(links) {
