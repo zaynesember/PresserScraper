@@ -1,3 +1,7 @@
 "URL","error_message"
-"mikerogers.house.gov","Error in node_hunter(links[[i]], debug) : 
-  No valid PR text node found for https://mikerogers.house.gov"
+"https://grijalva.house.gov","Error in node_hunter(links[[i]], debug) : 
+  No valid date node found for https://grijalva.house.gov"
+"https://hamadeh.house.gov","Error in node_hunter(links[[i]], debug) : 
+  No valid title node found for https://hamadeh.house.gov"
+"https://crawford.house.gov","Error in if (!grepl(""^https?://"", pr_page_link)) { : 
+  argument is of length zero"

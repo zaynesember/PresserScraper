@@ -28,9 +28,25 @@ name_cleaner <- function(name){
 }
 ```
 
+# Getting House links
+```{r}
+house_links <- read_html("https://www.house.gov/representatives") %>% 
+  html_elements(".views-field-value-5 a") %>% 
+  html_attr("href") %>% 
+  sapply(FUN=function(x) sub("(house\\.gov).*", "\\1", x)) # Clean junk tacked on the end
+
+house_names <- read_html("https://www.house.gov/representatives") %>% 
+  html_elements(".views-field-value-5 a") %>% 
+  html_text() %>% str_trim()
+
+names(house_links) <- house_names
+```
+
 # Scraper v2
 
-Helpers
+## Helpers
+
+### Date format detector
 ```{r}
 # Helper function to detect date formats for a list of strings
 detect_date_formats <- function(date_strings) {
@@ -48,6 +64,7 @@ detect_date_formats <- function(date_strings) {
     
     # Full month name formats like "September 23, 2020"
     "%B %d, %Y",
+    "%B %d %Y",
     "%B %d, %Y %H:%M:%S",
 
     # Abbreviated month name formats like "Sep 23, 2021" (without a period)
@@ -59,12 +76,20 @@ detect_date_formats <- function(date_strings) {
     "%b. %d, %Y %H:%M:%S"
   )
   
+  # Function to clean ordinal suffixes (st, nd, rd, th) from date strings
+  clean_ordinal_suffixes <- function(date_str) {
+    gsub("(\\d{1,2})(st|nd|rd|th)", "\\1", date_str, perl = TRUE)
+  }
+  
   # For each string in date_strings, find the first format (if any) that parses successfully
   sapply(date_strings, function(ds) {
     fmt_found <- NA_character_
     
+    # Remove ordinal suffixes before checking formats
+    cleaned_ds <- clean_ordinal_suffixes(ds)
+    
     for (fmt in candidate_formats) {
-      parsed <- suppressWarnings(strptime(ds, format = fmt))
+      parsed <- suppressWarnings(strptime(cleaned_ds, format = fmt))
       if (!is.na(parsed)) {
         fmt_found <- fmt
         break
@@ -75,81 +100,264 @@ detect_date_formats <- function(date_strings) {
   })
 }
 
-detect_pr_link_format <- function(strings, home_link, pr_page_link) {
+```
 
-  #path_pattern <- "^/[[:alnum:]._/-]+$"
-  url_pattern  <- "^https?://[[:alnum:]._/-]+$"
+
+### PR link formatter
+```{r}
+format_pr_link <- function(pr_links, pr_page_link) {
+  url_pattern <- "^https?://[[:alnum:]._/-]+$"
   
-  retVal <- sapply(strings, 
-             FUN=function(x){
-                            if(grepl(url_pattern, x)) x
-                            else if(substr(x, 1, 19)=="documentsingle.aspx"){
-                              x <- paste0(sub("documentquery\\.aspx.*", "", pr_page_link),
-                                          x)
-                            }
-                            else{
-                              if(substr(x, 1, 1)!= "/") x <- paste0("/", x)
-                              # if overlap between x and pr_page_link
-                                # merge
-                              else paste0(pr_page_link, x)
-                            }
-                            })
+  # Ensure pr_links is treated as a vector
+  if (!is.vector(pr_links)) pr_links <- c(pr_links)
+  
+  # Function to extract the base path from a URL (excluding domain)
+  extract_base_path <- function(url) {
+    parts <- unlist(strsplit(url, "/"))
+    if (length(parts) > 3) {
+      return(paste(parts[4:length(parts)], collapse = "/"))  # Extract everything after domain
+    }
+    return("")
+  }
+  
+  # Function to extract just the domain from a URL
+  extract_domain <- function(url) {
+    parts <- unlist(strsplit(url, "/"))
+    if (length(parts) >= 3) {
+      return(paste(parts[1:3], collapse = "/"))  # Extract "https://site.com"
+    }
+    return(url)  # Return unchanged if something goes wrong
+  }
+  
+  # Function to extract the parent path (i.e., the directory) from a full URL
+  extract_parent_path <- function(url) {
+    url_no_query <- sub("\\?.*$", "", url)  # Remove query parameters
+    return(dirname(url_no_query))  # Get directory path
+  }
+  
+  # Extract components of pr_page_link
+  pr_page_base <- extract_base_path(pr_page_link)
+  pr_page_domain <- extract_domain(pr_page_link)
+  pr_page_parent <- extract_parent_path(pr_page_link)
+  
+  # Extract base paths from pr_links
+  pr_links_bases <- unique(sapply(pr_links, extract_base_path))  # Get unique base paths
+  
+  # If pr_links has a more reliable base path, use it
+  if (length(pr_links_bases) > 0 && pr_page_base %in% pr_links_bases == FALSE) {
+    preferred_base <- dirname(pr_links_bases[1])  # Get directory path
+    pr_page_link <- paste0(pr_page_domain, "/", preferred_base)  # Reconstruct pr_page_link with the new base
+  }
+  
+  # Process each link correctly
+  retVal <- sapply(pr_links, 
+                   FUN = function(x) {
+                     if (grepl(url_pattern, x)) {
+                       return(x)  # Already absolute URL, return as is
+                     } else if (grepl("^\\?", x) || grepl("documentsingle.aspx", x)) {
+                       # If it's a query-style link like "?DocumentID=4060" or "documentsingle.aspx",
+                       # it should inherit the parent directory of pr_page_link.
+                       return(paste0(pr_page_parent, "/", x))
+                     } else {
+                       # Ensure it is properly appended to the corrected base path
+                       return(url_absolute(x, pr_page_link))
+                     }
+                   })
   
   names(retVal) <- NULL
-  
   return(retVal[!is.na(retVal)])
 }
 
+# format_pr_link("/2025/3/rep-sewell-introduces-the-john-r-lewis-voting-rights-advancement-act-ahead-of-the-60th-anniversary-of-bloody-sunday",
+#                 "https://sewell.house.gov/media/press-releases")
 
-detect_pr_link_format(c("documentsingle.aspx?DocumentID=4060"),
-                      c("https://mikerogers.house.gov"),
-                      c("https://mikerogers.house.gov/news/documentquery.aspx?DocumentTypeID=27"))
 
-grepl("^/[[:alnum:]._/-]+$","documentsingle.aspx?DocumentID=4060")
-
-# detect_pr_link_format(c("https://schweikert.house.gov/2025/02/13/four-key-moments-hearing-on-the-lack-of-return-on-investment-from-irs-funding-and-the-need-for-agency-modernization/"), "https://schweikert.house.gov")
+# format_pr_link("/media-center/press-releases/amata-s-igia-message-calls-fishing-restoration-and-remember-us",
+#                "https://radewagen.house.gov/media/press-releases")
+# 
+# format_pr_link("documentsingle.aspx?DocumentID=4060",
+#                 "https://mikerogers.house.gov/news/documentquery.aspx?DocumentTypeID=27")
+# 
+# format_pr_link("documentsingle.aspx?DocumentID=4060",
+#                 "https://mikerogers.house.gov/news/?page=1")
+# 
+# format_pr_link("/media/press-releases/steil-issues-statement-on-president-trump-s-address-to-the-joint-session-of-congress",
+#                "https://steil.house.gov/media/press-releases")
 ```
 
-Main functions
+## Main functions
 
-## Presser page finder
+### Presser page finder
 ```{r}
-presser_page_finder <- function(link, debug=F){
-  page <- read_html(link)
+presser_page_finder <- function(link, debug = FALSE) {
+  trim_slash <- function(x) sub("/+$", "", x)
   
-  # XPath explanation:
-  # - //a selects all <a> elements.
-  # - translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') converts the text to lowercase.
-  # - The first condition checks if the text contains "press release".
-  # - The second condition checks if the text contains "news" but not "newsletter".
-  # - The and @href part ensures that only nodes with an href attribute are selected.
-  link_node <- html_element(
-    page,
-    xpath = "//a[
-    (
-      contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'press release')
-      or
-      (
-        contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'news')
-        and
-        not(contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'newsletter'))
-      )
-    )
-    and @href
-  ]"
+  # Expanded list of known subdirectories for press releases
+  possible_subdirs <- c(
+    "press-release", "press-releases", "pressroom", "press-room",
+    "category/congress_press_release", "category/press-release", "category/press-releases"
   )
   
-  if (!is.null(link_node)) {
-    href_value <- html_attr(link_node, "href")
-  } else {
-    message("No relevant link found.")
+  # Function to safely read an HTML page
+  try_read_html <- function(url) {
+    tryCatch(
+      read_html(url),
+      error = function(e) {
+        if (debug) message("Could not read page: ", url)
+        NULL
+      }
+    )
   }
   
-  return(href_value)
+  # Function to extract the base directory from a full URL if it contains a known press subdir
+  extract_base_press_url <- function(url) {
+    parts <- unlist(strsplit(url, "/"))
+    last_valid_index <- suppressWarnings(
+      max(which(tolower(parts) %in% possible_subdirs), na.rm = TRUE)
+    )
+    
+    if (!is.finite(last_valid_index)) return(url)  # If no known subdir found, return as is
+    return(paste(parts[1:last_valid_index], collapse = "/"))  # Return trimmed URL
+  }
+  
+  # Function to find all press-related links on a given page
+  find_all_press_links <- function(html_obj, base_url) {
+    if (is.null(html_obj)) return(character(0))
+    
+    anchors <- html_elements(html_obj, "a[href]")
+    if (length(anchors) == 0) return(character(0))
+    
+    txts  <- tolower(html_text(anchors, trim = TRUE))
+    hrefs <- tolower(html_attr(anchors, "href"))
+    
+    # Identify relevant links
+    idx_press <- grepl("press release", txts) | grepl("press-release|press-releases|pressroom|press-room", hrefs)
+    idx_category_press <- grepl("category/congress_press_release|category/press-release|category/press-releases", hrefs)
+    idx_news <- grepl("news", txts) & !grepl("newsletter", txts)
+    
+    keep_idx <- idx_press | idx_category_press | idx_news
+    if (!any(keep_idx)) return(character(0))
+    
+    found_hrefs <- unique(url_absolute(html_attr(anchors[keep_idx], "href"), base_url))
+    
+    # Prioritize links containing "press-releases" or "category/congress_press_release" explicitly
+    press_priority <- grepl("press-releases|press-release|pressroom|press-room|category/congress_press_release", found_hrefs)
+    
+    # Sort links to ensure most relevant appear first
+    sorted_hrefs <- c(found_hrefs[press_priority], found_hrefs[!press_priority])
+    
+    # Extract only the base URL up to the relevant press directory
+    return(unique(sapply(sorted_hrefs, extract_base_press_url)))
+  }
+  
+  # Function to compare content of two pages (checks if they are distinct)
+  is_different_page <- function(url1, url2) {
+    pg1 <- try_read_html(url1)
+    pg2 <- try_read_html(url2)
+    if (is.null(pg1) || is.null(pg2)) return(FALSE)
+    
+    txt1 <- paste(xml_text(pg1), collapse = " ")
+    txt2 <- paste(xml_text(pg2), collapse = " ")
+    
+    return(nchar(txt1) > 0 && nchar(txt2) > 0 && !identical(txt1, txt2))
+  }
+  
+  # -------------------------------------------------------
+  # Main Logic
+  # -------------------------------------------------------
+  
+  main_page <- try_read_html(link)
+  if (is.null(main_page)) {
+    if (debug) message("Home page is not available. Returning NULL.")
+    return(NULL)
+  }
+  
+  # 1) Look for press links on the main page
+  press_links_main <- find_all_press_links(main_page, link)
+  if (length(press_links_main) > 0) {
+    best_press_link <- press_links_main[1]
+    if (debug) message("Found a direct press/news link on the main page: ", best_press_link)
+    return(best_press_link)
+  }
+  
+  # 2) Look for 'media-center' or 'media' links
+  anchors_all <- html_elements(main_page, "a[href]")
+  if (length(anchors_all) == 0) {
+    if (debug) message("No anchors on main page. Returning NULL.")
+    return(NULL)
+  }
+  
+  all_hrefs <- url_absolute(html_attr(anchors_all, "href"), link)
+  all_hrefs_lower <- tolower(all_hrefs)
+  
+  # Identify media-related links
+  media_idx <- grepl("media-center", all_hrefs_lower) | grepl("media", all_hrefs_lower)
+  media_links <- unique(all_hrefs[media_idx])
+  
+  if (length(media_links) == 0) {
+    if (debug) message("No 'media' or 'media-center' link found. Returning NULL.")
+    return(NULL)
+  }
+  
+  # Prioritize "press-releases" and "category/congress_press_release" links over generic "media" links
+  pr_idx <- grepl("press-releases|press-release|pressroom|press-room|category/congress_press_release", tolower(media_links))
+  sorted_media_links <- c(media_links[pr_idx], media_links[!pr_idx])
+  
+  chosen_media_link <- sorted_media_links[1]  # Pick the best available
+  
+  # If media link already contains a press-related keyword, return the base version of it
+  if (grepl("press-releases|press-release|category/congress_press_release", tolower(chosen_media_link))) {
+    best_press_link <- extract_base_press_url(chosen_media_link)
+    if (debug) message("Directly found press-related link: ", best_press_link)
+    return(best_press_link)
+  }
+  
+  # Read the "media" or "media-center" page
+  if (debug) message("Reading 'media' page: ", chosen_media_link)
+  media_page <- try_read_html(chosen_media_link)
+  if (is.null(media_page)) {
+    if (debug) message("No media page to parse. Returning NULL.")
+    return(NULL)
+  }
+  
+  # 3) Look for press links on the media page
+  press_links_media <- find_all_press_links(media_page, chosen_media_link)
+  if (length(press_links_media) > 0) {
+    best_press_link <- press_links_media[1]
+    if (debug) message("Found press link under the media page: ", best_press_link)
+    return(best_press_link)
+  }
+  
+  # 4) If no direct press links found, try common subdirectories
+  media_base <- trim_slash(chosen_media_link)
+  for (subdir in possible_subdirs) {
+    test_url <- paste0(media_base, "/", subdir)
+    if (is_different_page(media_base, test_url)) {
+      best_press_link <- extract_base_press_url(test_url)
+      if (debug) message("Found valid subdirectory page: ", best_press_link)
+      return(best_press_link)
+    }
+  }
+  
+  if (debug) message("No relevant press release link found.")
+  return(NULL)
 }
+
+# presser_page_finder("https://crane.house.gov", debug=T)
+
+#presser_page_finder("https://mikerogers.house.gov", debug=T)
+# 
+# 
+#presser_page_finder("https://steil.house.gov")
+presser_page_finder("https://radewagen.house.gov", debug=T)
+
+#presser_page_finder("https://crane.house.gov", debug=T)
 ```
 
-## Node hunter
+
+
+
+### Node hunter
 ```{r}
 # Loops through known nodes for elements (titles, dates, PR links and text)
 node_hunter <- function(link, debug=F){
@@ -165,54 +373,99 @@ node_hunter <- function(link, debug=F){
   # Sanitize input by removing extra forward slash at end of URL if present
   if(substr(link, nchar(link), nchar(link))=="/") link <- substr(link, 1, nchar(link)-1)
   
-  # Find the link for the press release page
-  pr_page_link <- presser_page_finder(link, debug=debug)
-  
-  if(is.na(link)) stop(paste0("Press release page could not be found for ", link))
-  
-  # Build the URL for the press releases page
-  if (!grepl("^https?://", pr_page_link)) {
-    # Remove trailing slashes from link
-    base_link <- sub("/+$", "", link)
-    
-    # Remove leading slashes from pr_page_link
-    relative_link <- sub("^/+", "", pr_page_link)
-    
-    # Combine with a single slash between them
-    pr_page_link <- paste0(base_link, "/", relative_link)
-  }
-  
-  # Save PR page home to return later
-  pr_page_link_home <- pr_page_link
+  # Initialize variables we'll return
+  pr_page_link <- NA
+  page_string <- NA
+  page_index_start <- NA
+  date_node <- NA
+  date_node_type <- NA
+  date_format <- NA
+  title_node <- NA
+  title_node_type <- NA
+  pr_link_node <- NA
+  pr_link_node_type <- NA
+  text_node <- NA
+  text_node_type <- NA
+  edgecase <- F # Indicator for non-paginated cases
   
   # Read in our webpage elements to look through
   nodes <- read_excel("nodes.xlsx")
   
-  ## FINDING PAGINATION FORMAT
-  
-  pagination <- nodes %>% filter(element=="page link")
-  
-  page_index_start <- NA
-  page_string <- NA
-  
-  # Loop through press release page link formats until one works, then determine
-  # if the pagination starts at 0 or 1
-  for(p in pagination$string){
-    page0 <- try(read_html(paste0(pr_page_link, p, 0)), silent=T)
-    page1 <- try(read_html(paste0(pr_page_link, p, 1)), silent=T)
+  # Catch edge cases that require different scraping approach
+  if(grepl("https://crane.house.gov", link)){
     
-    # A non-blank page will have length > 1
-    if(length(page0)==1 & length(page0)==1) next
-    else if(length(page1)==2){ page_index_start <- 1; page_string <- p; break }
-    else if(length(page0)==2){ page_index_start <- 0; page_string <- p; break }
+    edgecase <- T
+    
+    pr_page_link <- paste0(link, "/media")
+    
+    pr_page <- try(read_html(pr_page_link), silent=T)
+    
+    if(!inherits(pr_page, "try-error") & length(pr_page)==2){
+      pr_page_link_home <- pr_page_link
+    }
+    else{
+      stop("Edge case detected but failed to find PR page for: ", link)
+    }
   }
-  
-  if(is.na(page_string)) stop(paste0("Pagination failed for ", link))
-  
-  # Build the press release page URL
-  pr_page_link <- paste0(pr_page_link, page_string, page_index_start)
-  
-  if(debug) message("URL: ", pr_page_link)
+  # Otherwise figure out link for the PR page and pagination
+  else{
+    
+    # Find the link for the press release page
+    pr_page_link <- presser_page_finder(link, debug=debug)
+    
+    if(is.na(link)) stop(paste0("Press release page could not be found for ", link))
+    
+    # Build the URL for the press releases page
+    if (!grepl("^https?://", pr_page_link)) {
+      # Remove trailing slashes from link
+      base_link <- sub("/+$", "", link)
+      
+      # Remove leading slashes from pr_page_link
+      relative_link <- sub("^/+", "", pr_page_link)
+      
+      # Combine with a single slash between them
+      pr_page_link <- paste0(base_link, "/", relative_link)
+    }
+    
+    # Save PR page home to return later
+    pr_page_link_home <- pr_page_link
+    
+    ## FINDING PAGINATION FORMAT
+    
+    pagination <- nodes %>% filter(element=="page link")
+    
+    page_index_start <- NA
+    page_string <- NA
+    
+    # Loop through press release page link formats until one works, then determine
+    # if the pagination starts at 0 or 1
+    for(p in pagination$string){
+      page0 <- try(read_html(paste0(pr_page_link, p, 0)), silent=T)
+      page1 <- try(read_html(paste0(pr_page_link, p, 1)), silent=T)
+      
+      # A non-blank page will have length > 1
+      if(length(page0)==1 & length(page0)==1) next
+      else if(length(page0) > length(page1)){ page_index_start <- 0; page_string <- p; break }
+      else if(length(page0) < length(page1)){ page_index_start <- 1; page_string <- p; break }
+      else if(length(page0)==2 & length(page1)==2 & identical(page0$doc, page1$doc)){
+        page_index_start <- 1; page_string <- p; break 
+      }
+      else if(length(page0)==2 & length(page1)==2 & !identical(page0$doc, page1$doc)){
+        if(page0 %>% html_text() %>% str_detect("There are no records to display")){
+          page_index_start <- 1; page_string <- p; break
+        }
+        else{ page_index_start <- 0; page_string <- p; break }
+      }
+      else stop("Determining starting page index failed for: ", link)
+    }
+    
+    if(is.na(page_string)) stop(paste0("Pagination failed for ", link))
+    
+    # Build the press release page URL
+    pr_page_link <- paste0(pr_page_link, page_string, page_index_start)
+    
+    if(debug) message("URL: ", pr_page_link)
+  }
   
   ## FINDING DATE LINK NODE
   
@@ -222,7 +475,7 @@ node_hunter <- function(link, debug=F){
   date_formats <- NA
   date_attempt <- character(0) # Not NA b/c we differentiate successes by length
                                # Might have a page with 1 presser
-  print("here1")
+  
   # Loop through date nodes until one works
   for(i in 1:nrow(date_nodes)){
     # Case when date can be found with xpath
@@ -237,10 +490,17 @@ node_hunter <- function(link, debug=F){
                             html_elements(date_nodes$string[i]) %>% 
                             html_text() %>% str_trim(), silent=T)
     }
-    traceback()
-    print("here2")
+    
     if(length(date_attempt)==0 | inherits(date_attempt, "try-error")) next
     else{
+      
+      # Remove any likely non-date junk in our vector.
+      # The longest normally formatted date (i.e. "September 31, 2025") is 18
+      # characters long
+      date_attempt <- date_attempt[nchar(date_attempt)<=18]
+      
+      if(length(date_attempt)==0) next
+      
       # Detect the format of each scraped date
       date_formats <- detect_date_formats(date_attempt)
       
@@ -283,7 +543,8 @@ node_hunter <- function(link, debug=F){
                              html_text() %>% str_trim(), silent=T)
     }
 
-    if(length(title_attempt)<1 | inherits(title_attempt, "try-error")) next 
+    if(length(title_attempt)<1 | inherits(title_attempt, "try-error") |
+       length(title_attempt) != length(date_attempt)) next 
     else{
       title_node <- title_nodes$string[i]
       title_node_type <- title_nodes$type[i]
@@ -344,11 +605,24 @@ node_hunter <- function(link, debug=F){
   
   if(debug) message("PR link node:", pr_link_node)
   
-  print(pr_link_attempt)
+  # Check if each PR link is a path or a complete URL and format accordingly
+  pr_link_attempt1 <- format_pr_link(pr_link_attempt, pr_page_link)
   
-  # Check if each PR link is a path, a URL, or neither
-  # Remove elements that are neither, turn paths into full URLs
-  pr_link_attempt <- detect_pr_link_format(pr_link_attempt, link, pr_page_link)
+  try_pr_link <- try(read_html(pr_link_attempt1[1]), silent=T)
+  
+  # If the first attempt fails it's probably because the individual press release
+  # URLs don't include the path to the press releases page
+  if(inherits(try_pr_link, "try-error")){
+    pr_link_attempt2 <- format_pr_link(pr_link_attempt, link)
+
+    # If that doesn't work, throw an error
+    if(inherits(try(read_html(pr_link_attempt2[1]), silent=T), "try-error")){
+      stop("Failed to build individual press release links for: ", link)
+    }
+    # Otherwise we now have our pr_link_attempt
+    else pr_link_attempt <- pr_link_attempt2
+  }
+  else pr_link_attempt <- pr_link_attempt1
   
   if(debug) message("Example PR link: ", pr_link_attempt[1])
   
@@ -417,23 +691,181 @@ node_hunter <- function(link, debug=F){
               pr_link_node=pr_link_node,
               pr_link_node_type=pr_link_node_type,
               text_node=text_node,
-              text_node_type=text_node_type
+              text_node_type=text_node_type,
+              edgecase=edgecase # TRUE when legislator requires non-paginated scraping
               ))
   
 }
 
-# node_hunter(link="schweikert.house.gov", debug=T)
+node_hunter(link="stanton.house.gov", debug=T)
 
-node_hunter(link="mikerogers.house.gov", debug=T)
+# node_hunter(link="sewell.house.gov", debug=T)
+
+# node_hunter(link="barrymoore.house.gov", debug=T)
+
+# info_crane <- node_hunter(link="crane.house.gov", debug=T)
+
 ```
 
+### Edgecase scraper
 ```{r}
-#read_html("https://mikerogers.house.gov/news/documentsingle.aspx?DocumentID=4060") %>% 
-read_html("https://mikerogers.house.gov/news/documentquery.aspx?DocumentTypeID=27") %>% 
-  html_elements(".newsie-titler a") %>% html_attr("href")
+edgecase_scraper <- function(info, start_date, end_date, 
+                             pressers=data.frame(date=c(), title=c(), body=c(), 
+                                                 tags=c(), url=c()),
+                             clean_text=F, debug=F, progress=T){
+  
+  # Store scraping info in individual variables to make life easier
+  homepage_link <- info$homepage_link
+  pr_page_link <- info$pr_page_link
+  date_node <- info$date_node
+  date_node_type <- info$date_node_type
+  date_format <- info$date_format
+  title_node <- info$title_node
+  title_node_type <- info$title_node_type
+  pr_link_node <- info$pr_link_node
+  pr_link_node_type <- info$pr_link_node_type
+  text_node <- info$text_node
+  text_node_type <- info$text_node_type
+  
+  start_date <- as.Date(start_date)
+  end_date <- as.Date(end_date)
+  
+  # Get all the dates in the range
+  date_range <- seq(from = start_date, to = end_date, by = "day")
+  
+  # Format the dates to be month year string we can use to navigate
+  # press releases by month for legislators whose sites don't paginate
+  monthyears <- unique(format(date_range, "/%Y/%m"))
+  
+  current_page <- NA
+  
+  for(m in monthyears){
+    
+    if(progress) message(ifelse(debug, "", "\014"), "Scraping pressers from: ", homepage_link, 
+                       "    ", "/Year/Month: ", m)
+    
+    current_page <- try(read_html(paste0(homepage_link, m)), silent=T)
+    
+    if(inherits(current_page, "try-error")) next
+    
+    if(date_node_type=="css"){
+      dates <- try(current_page %>% html_elements(date_node) %>% 
+                            html_text() %>% str_trim, silent=T)
+    }
+    else{
+      dates <- try(current_page %>% html_elements(xpath=date_node) %>% 
+                            html_text() %>% str_trim, silent=T)
+    }
+    
+    if(inherits(dates, "try-error") | length(dates)==0) next
+    
+    # Format the dates, also remove any likely non-date junk in our vector
+    # The longest normally formatted date (i.e. "September 31, 2025") is 18
+    # characters long
+    dates <- sapply(dates[nchar(dates)<=18], 
+                    function(x) as.character(strptime(x, f <- date_format, 
+                                                      tz = "")))
+    
+    
+    if(all(is.na(dates))){
+      stop("Failed to format scraped dates for: ", homepage_link)
+    }
+    # Have we reached a page in our date range?
+    if(head(dates, 1) > end_date & tail(dates, 1) > end_date) next
+    else if(head(dates, 1) < start_date){
+      # Stop paginating
+      return(pressers)
+    }
+    else{
+      # Page has pressers in our date range--scrape them
+
+      # Get indexes for the dates within our range
+      desired_dates <- which(dates >= start_date & dates <= end_date)
+      
+      # Format the dates so we can use them to navigate to press releases
+      date_strings <- format(as.Date(dates[desired_dates]),
+                                     "/%Y/%m/%d")
+      
+      
+      # If there are pressers from the desired date range on the page then
+      # get all the data we want
+      if(length(desired_dates)>0){
+        
+        # Get titles
+        if(title_node_type=="css") titles <- current_page %>% html_elements(title_node)
+        else titles <- current_page %>% html_elements(xpath=title_node)
+        
+        titles <- titles %>% html_text() %>% str_trim()
+        
+        # Build the PR URLs
+        pr_links <- paste0(homepage_link, date_strings)
+        
+        # Subset to only pressers within date range
+        titles <- titles[desired_dates]
+        dates <- dates[desired_dates]
+        
+        texts <- sapply(pr_links, 
+                          FUN=function(l){
+                            if(text_node_type=="css") texts <- read_html(l) %>% html_elements(text_node)
+                            else texts <- read_html(l) %>% html_elements(xpath=text_node)
+                              
+                            texts <- texts %>% html_text() %>% str_trim()
+                          })
+
+        # Get all known issue tag nodes
+        tag_nodes <- read_excel("nodes.xlsx") %>% filter(element=="tags")
+        
+        tags <- c()
+        tag <- NA
+
+        # Try each known node for each press release
+        # This is slow but not every press release will have a tag so can't
+        # easily find node with node_hunter like other elements
+        for(p in pr_links){
+          for(i in 1:nrow(tag_nodes)){
+            if(tag_nodes$type[i]=="css"){
+              tag <- try(read_html(p) %>% html_elements(tag_nodes$string[i]),
+                          silent=T)
+            }
+            else{
+              tag <- try(read_html(p) %>% html_elements(xpath=tag_nodes$string[i]),
+                          silent=T)
+            }
+            if(length(tag)!=1){
+              if(length(tag)==0) tag <- NA
+              else tag <- paste(tag, collapse=";")
+            }
+            else if(!inherits(tag, "try-error") | !is.na(tag) | 
+               !identical(tag, character(0))){
+              tag <- tag %>% html_text() %>% str_trim()
+              break
+            } 
+            else tag <- NA
+          }
+          tags <- c(tags, tag)
+        }
+
+        # Add everything to the data frame
+        pressers <- bind_rows(pressers, 
+                          data.frame(date=dates, 
+                                     title=titles, body=texts, 
+                                     tags=tags, url=pr_links))
+        }
+    }
+    
+      
+    }
+  return(pressers)
+}
+
+# edgecase_scraper(info_crane, "2024-11-01", "2025-02-15")
+
+edgecase_scraper(info_crane, "2025-03-06", "2025-03-08")
 ```
 
-## Member scraper
+
+
+### Member scraper
 ```{r}
 # Recursively scrapes data for a single member
 member_scraper <- function(info, start_date, end_date, page_index=0,
@@ -442,6 +874,12 @@ member_scraper <- function(info, start_date, end_date, page_index=0,
                            page_limit=1000,
                            clean_text=F, # TODO: add option to have clean and raw text
                            debug=F, progress=T){
+  
+  # Catch when legislator requires non-paginated scraping
+  if(info$edgecase==T){
+    return(edgecase_scraper(info, start_date, end_date, pressers,
+                            clean_text, debug, progress))
+  }
   
   # Store scraping info in individual variables to make life easier
   homepage_link <- info$homepage_link
@@ -466,30 +904,29 @@ member_scraper <- function(info, start_date, end_date, page_index=0,
     return(pressers)
   }
   
-  page_index <- ifelse(page_index_start==0, page_index_start, page_index)
+  page_index <- ifelse(page_index==0, page_index_start, page_index)
   
   if(progress) message(ifelse(debug, "", "\014"), "Scraping pressers from: ", homepage_link, 
                        "    ", "pg: ", page_index)
   
   current_page <- read_html(paste0(pr_page_link, page_string, page_index))
-
-  # dates <- ifelse(date_node_type=="css", html_elements(current_page, date_node), 
-  #                 html_elements(current_page, xpath=date_node)) %>% 
-  #   html_text() %>% str_trim()
   
   if(date_node_type=="css") dates <- current_page %>% html_elements(date_node)
   else dates <- current_page %>% html_elements(xpath=date_node)
   
   dates <- dates %>% html_text() %>% str_trim()
-  
+
   # Handle empty page case, i.e. when all the pages have been checked
     if(length(dates)==0) return(pressers)
 
-    # Format the dates
-    dates <- sapply(dates, 
+    # Format the dates, also remove any likely non-date junk in our vector
+    # The longest normally formatted date (i.e. "September 31, 2025") is 18
+    # characters long
+    dates <- sapply(dates[nchar(dates)<=18], 
                     function(x) as.character(strptime(x, f <- date_format, 
                                                       tz = "")))
 
+    
     if(head(dates, 1) > end_date & tail(dates, 1) > end_date){
       # Haven't reached a page in our date range; recurse on the next page
       return(rbind(pressers, member_scraper(info, start_date, end_date,
@@ -528,7 +965,7 @@ member_scraper <- function(info, start_date, end_date, page_index=0,
         pr_links <- pr_links[desired_dates]
         
         # Build the PR URLs
-        pr_links <- detect_pr_link_format(pr_links, homepage_link, pr_page_link)
+        pr_links <- format_pr_link(pr_links, pr_page_link)
 
         texts <- sapply(pr_links, 
                           FUN=function(l){
@@ -585,25 +1022,32 @@ member_scraper <- function(info, start_date, end_date, page_index=0,
 # info <- node_hunter(link="barrymoore.house.gov", debug=T)
 # 
 # member_scraper(info=info,
-#                start_date="2024-12-01", end_date="2024-12-31",
+#                start_date="2025-01-01", end_date=Sys.Date(),
 #                            pressers=data.frame(date=c(), title=c(), body=c(),
 #                                                tags=c(), url=c()),
 #                            debug=T, progress=T)
 
 ```
 
-## Main scraping function
+### Main scraper
 ```{r}
 # Main scraping function
 presser_scraper <- function(links, start_date, end_date=Sys.Date(), 
                             clean_text=F, page_limit=1000, debug=F,
                             progress=T, remove_duplicates=F,
-                            log_fails=T){
+                            log_fails=F){
   
   if(start_date > end_date) stop("Start date is after end date")
   
+  if(as.Date(end_date) > Sys.Date()){
+    end_date <- Sys.Date()
+    warning("End date falls after current system date, setting end date to ",
+            Sys.Date(), "\n")
+  }
+  
   pressers <- data.frame(date=NA, title=NA, body=NA, 
                          tags=NA, url=NA)
+  
 
   if(!is.null(names(links))){ 
     pressers <- data.frame(name=NA, date=NA, title=NA, body=NA, 
@@ -622,7 +1066,7 @@ presser_scraper <- function(links, start_date, end_date=Sys.Date(),
                    silent=T)
     
     if(inherits(scraped, "try-error")){
-      message("Scraping failed for: ", links[[i]])
+      message(ifelse(debug, "", "\014"), "Scraping failed for: ", links[[i]])
 
       if(log_fails) fails <- bind_rows(fails, 
                                    data.frame(URL=links[[i]], 
@@ -649,9 +1093,12 @@ presser_scraper <- function(links, start_date, end_date=Sys.Date(),
     message(nrow(fails), " failure(s) logged in fails.csv")
   }
   
-  row.names(pressers) <- NULL
-  
   if(remove_duplicates) pressers <- distinct(pressers)
+  
+  # Remove rows with all NAs
+  pressers <- pressers[rowSums(is.na(pressers)) < ncol(pressers), ]
+  
+  row.names(pressers) <- NULL
   
   return(pressers)
 }
@@ -660,36 +1107,26 @@ presser_scraper <- function(links, start_date, end_date=Sys.Date(),
 #                         Barry="barrymoore.house.gov"),
 #                 start_date="2025-01-01",
 #                 end_date=Sys.Date(), 
-#                 debug=F, progress=T)
+#                 debug=F, progress=T, log_fails=F)
 
-presser_scraper(links=c(Rogers="mikerogers.house.gov"),
+presser_scraper(links="grijalva.house.gov",
                 start_date="2025-01-01",
                 end_date=Sys.Date(),
-                debug=T, progress=T)
-
-read_html("https://mikerogers.house.gov/news/documentquery.aspx?DocumentTypeID=27&Page=1") %>% 
-  html_elements("")
+                debug=T, progress=T, log_fails=F)
 ```
 
-## Getting House links
-```{r}
-house_links <- read_html("https://www.house.gov/representatives") %>% 
-  html_elements(".views-field-value-5 a") %>% 
-  html_attr("href") %>% 
-  sapply(FUN=function(x) sub("(house\\.gov).*", "\\1", x)) # Clean junk tacked on the end
-
-house_names <- read_html("https://www.house.gov/representatives") %>% 
-  html_elements(".views-field-value-5 a") %>% 
-  html_text() %>% str_trim()
-
-names(house_links) <- house_names
-```
+Failing V
+Found a direct press/news link on the main page: https://grijalva.house.gov/category/congress_press_release/
+URL: https://grijalva.house.gov/category/congress_press_release/?page=0
+Date node: .info-date
+Date formats: %B %d, %Y | %B %d, %Y | %B %d, %Y | %B %d, %Y | %B %d, %Y | %B %d, %Y | %B %d, %Y
+Scraping failed for: grijalva.house.gov
 
 ```{r}
-test <- presser_scraper(links=house_links[1:20],
+test <- presser_scraper(links=house_links[11:20],
                         start_date="2025-01-01",
                         end_date=Sys.Date(), 
-                        debug=F, progress=T)
+                        debug=F, progress=T, log_fails=T)
 ```
 
 
@@ -720,10 +1157,13 @@ temp <- try(read_html("https://obama.house.gov"))
 temp[[1]] %>% str_trim()
 ```
 
-https://barrymoore.house.gov/media/press-releases/rep-barry-moore-supports-continuing-resolution-deliver-relief-producers-and
-https://barrymoore.house.gov/media/press-releases/media/press-releases/rep-barry-moore-supports-continuing-resolution-deliver-relief-producers-and
+Removed from nodes.xlsx for now:
+dates	//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"col-auto\", \" \" ))]	xpath	F, G, J
+
 
 TODO: FIND MORE NODES FOR ISSUE TAGS
+
+TODO: CLEAN ISSUE TAGS
 
 TODO: MAYBE ADD OPTION TO NOT SCRAPE TAGS SINCE IT'S O(N^2)
 
