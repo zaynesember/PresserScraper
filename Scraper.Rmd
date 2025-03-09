@@ -349,7 +349,7 @@ presser_page_finder <- function(link, debug = FALSE) {
 # 
 # 
 #presser_page_finder("https://steil.house.gov")
-presser_page_finder("https://radewagen.house.gov", debug=T)
+presser_page_finder("https://grijalva.house.gov", debug=T)
 
 #presser_page_finder("https://crane.house.gov", debug=T)
 ```
@@ -379,7 +379,7 @@ node_hunter <- function(link, debug=F){
   page_index_start <- NA
   date_node <- NA
   date_node_type <- NA
-  date_format <- NA
+  date_formats <- NA
   title_node <- NA
   title_node_type <- NA
   pr_link_node <- NA
@@ -442,15 +442,20 @@ node_hunter <- function(link, debug=F){
     for(p in pagination$string){
       page0 <- try(read_html(paste0(pr_page_link, p, 0)), silent=T)
       page1 <- try(read_html(paste0(pr_page_link, p, 1)), silent=T)
+      page2 <- try(read_html(paste0(pr_page_link, p, 2)), silent=T)
       
       # A non-blank page will have length > 1
       if(length(page0)==1 & length(page0)==1) next
+      else if(identical(page0 %>% html_text(), page1 %>% html_text) &
+              identical(page1 %>% html_text(), page2 %>% html_text)){ next }
       else if(length(page0) > length(page1)){ page_index_start <- 0; page_string <- p; break }
       else if(length(page0) < length(page1)){ page_index_start <- 1; page_string <- p; break }
-      else if(length(page0)==2 & length(page1)==2 & identical(page0$doc, page1$doc)){
+      else if(length(page0)==2 & length(page1)==2 & identical(page0 %>% html_text(), 
+                                                              page1 %>% html_text())){
         page_index_start <- 1; page_string <- p; break 
       }
-      else if(length(page0)==2 & length(page1)==2 & !identical(page0$doc, page1$doc)){
+      else if(length(page0)==2 & length(page1)==2 & !identical(page0 %>% html_text(), 
+                                                               page1 %>% html_text())){
         if(page0 %>% html_text() %>% str_detect("There are no records to display")){
           page_index_start <- 1; page_string <- p; break
         }
@@ -467,7 +472,7 @@ node_hunter <- function(link, debug=F){
     if(debug) message("URL: ", pr_page_link)
   }
   
-  ## FINDING DATE LINK NODE
+  ## FINDING DATE NODE
   
   date_nodes <- nodes %>% filter(element=="dates")
   date_node <- NA
@@ -494,10 +499,12 @@ node_hunter <- function(link, debug=F){
     if(length(date_attempt)==0 | inherits(date_attempt, "try-error")) next
     else{
       
-      # Remove any likely non-date junk in our vector.
-      # The longest normally formatted date (i.e. "September 31, 2025") is 18
+      # Format the dates, also remove any likely non-date junk in our vector
+      # The longest normally formatted date (i.e. "September 31st, 2025") is 20
       # characters long
-      date_attempt <- date_attempt[nchar(date_attempt)<=18]
+      date_attempt <- gsub("  ", " ", date_attempt)
+      date_attempt <- gsub("(\\d{1,2})(st|nd|rd|th)", "\\1", date_attempt, perl = TRUE)
+      date_attempt <- date_attempt[nchar(date_attempt)<=20]
       
       if(length(date_attempt)==0) next
       
@@ -508,6 +515,7 @@ node_hunter <- function(link, debug=F){
       if(all(is.na(date_formats))) next
       # Otherwise we have our date node
       else{
+        date_attempt <- date_attempt[which(!is.na(date_formats))] # Remove non-date elements
         date_node <- date_nodes$string[i]
         date_node_type <- date_nodes$type[i] 
         break
@@ -526,6 +534,7 @@ node_hunter <- function(link, debug=F){
   title_node <- NA
   title_node_type <- NA
   title_attempt <- character(0)
+  title_attempt_original_length <- NA
   
    # Loop through title nodes until one works
   for(i in 1:nrow(title_nodes)){
@@ -544,8 +553,16 @@ node_hunter <- function(link, debug=F){
     }
 
     if(length(title_attempt)<1 | inherits(title_attempt, "try-error") |
-       length(title_attempt) != length(date_attempt)) next 
+       length(title_attempt) < length(date_attempt)) next 
     else{
+      title_attempt_original_length <- length(title_attempt)
+      
+      # If title_attempt has more elements than date_attempt, grab the last elements
+      # corresponding to the number of dates--sometimes headers are scraped before titles
+      if(length(title_attempt) > length(date_attempt)){
+        title_attempt <- title_attempt[(length(title_attempt) - length(date_attempt) + 1):length(title_attempt)]
+      }
+     
       title_node <- title_nodes$string[i]
       title_node_type <- title_nodes$type[i]
       break
@@ -564,10 +581,11 @@ node_hunter <- function(link, debug=F){
   pr_link_attempt <- try(read_html(pr_page_link) %>% 
                             html_elements(title_node) %>% html_attr("href") %>% 
                             str_trim(), silent=T)
-  
+
   # If grabbing using the title node didn't work then loop through known
   # PR link nodes
-  if(all(is.na(pr_link_attempt)) | inherits(pr_link_attempt, "try-error")){
+  if(all(is.na(pr_link_attempt)) | inherits(pr_link_attempt, "try-error") |
+     length(pr_link_attempt) > title_attempt_original_length){
     pr_link_nodes <- nodes %>% filter(element=="links")
     pr_link_node <- NA
     pr_link_attempt <- character(0)
@@ -589,7 +607,15 @@ node_hunter <- function(link, debug=F){
       }
   
       if(length(pr_link_attempt)<1 | inherits(pr_link_attempt, "try-error")) next 
+      
+      if(length(pr_link_attempt)<1 | inherits(pr_link_attempt, "try-error") |
+       length(pr_link_attempt) < length(date_attempt)) next 
       else{
+        # If pr_link_attempt has more elements than date_attempt, grab the last elements
+        # corresponding to the number of dates--sometimes headers are scraped before pr_links
+        if(length(pr_link_attempt) > length(date_attempt)){
+          pr_link_attempt <- pr_link_attempt[(length(pr_link_attempt) - length(date_attempt) + 1):length(pr_link_attempt)]
+        }
         pr_link_node <- pr_link_nodes$string[i]
         pr_link_node_type <- pr_link_nodes$type[i]
         break
@@ -599,6 +625,12 @@ node_hunter <- function(link, debug=F){
   }
   # Otherwise PR link node and type are same as title
   else{
+    # If pr_link_attempt has more elements than date_attempt, grab the last elements
+    # corresponding to the number of dates--sometimes headers are scraped before pr_links
+    if(length(pr_link_attempt) > length(date_attempt)){
+      pr_link_attempt <- pr_link_attempt[(length(pr_link_attempt) - length(date_attempt) + 1):length(pr_link_attempt)]
+    }
+    
     pr_link_node <- title_node
     pr_link_node_type <- title_node_type
   }
@@ -685,7 +717,7 @@ node_hunter <- function(link, debug=F){
               page_index_start=page_index_start,
               date_node=date_node,
               date_node_type=date_node_type,
-              date_format=date_formats[1],
+              date_formats=date_formats,
               title_node=title_node,
               title_node_type=title_node_type,
               pr_link_node=pr_link_node,
@@ -697,14 +729,17 @@ node_hunter <- function(link, debug=F){
   
 }
 
-node_hunter(link="stanton.house.gov", debug=T)
+node_hunter(link="hamadeh.house.gov", debug=T)
+
+read_html("https://hamadeh.house.gov/media/press-releases") %>%
+  html_elements(".views-row .font-weight-bold a") %>% html_attr("href")
+
 
 # node_hunter(link="sewell.house.gov", debug=T)
 
 # node_hunter(link="barrymoore.house.gov", debug=T)
 
 # info_crane <- node_hunter(link="crane.house.gov", debug=T)
-
 ```
 
 ### Edgecase scraper
@@ -719,7 +754,7 @@ edgecase_scraper <- function(info, start_date, end_date,
   pr_page_link <- info$pr_page_link
   date_node <- info$date_node
   date_node_type <- info$date_node_type
-  date_format <- info$date_format
+  date_formats <- info$date_formats
   title_node <- info$title_node
   title_node_type <- info$title_node_type
   pr_link_node <- info$pr_link_node
@@ -760,12 +795,16 @@ edgecase_scraper <- function(info, start_date, end_date,
     if(inherits(dates, "try-error") | length(dates)==0) next
     
     # Format the dates, also remove any likely non-date junk in our vector
-    # The longest normally formatted date (i.e. "September 31, 2025") is 18
+    # The longest normally formatted date (i.e. "September 31st, 2025") is 20
     # characters long
-    dates <- sapply(dates[nchar(dates)<=18], 
-                    function(x) as.character(strptime(x, f <- date_format, 
-                                                      tz = "")))
-    
+    dates <- dates[which(!is.na(date_formats))] # Remove non-date elements
+    dates <- gsub("  ", " ", dates)
+    dates <- gsub("(\\d{1,2})(st|nd|rd|th)", "\\1", dates, perl = TRUE)
+    dates <- dates[nchar(dates)<=20]
+    dates <- mapply(function(x, fmt){ 
+                      as.character(strptime(x, format = fmt, tz = ""))
+                    }, 
+                    dates, date_formats[which(!is.na(date_formats))])
     
     if(all(is.na(dates))){
       stop("Failed to format scraped dates for: ", homepage_link)
@@ -796,6 +835,12 @@ edgecase_scraper <- function(info, start_date, end_date,
         else titles <- current_page %>% html_elements(xpath=title_node)
         
         titles <- titles %>% html_text() %>% str_trim()
+        
+        # If titles has more elements than dates, grab the last elements
+        # corresponding to the number of dates--sometimes headers are scraped before titles
+        if(length(titles) > length(dates)){
+          titles <- titles[(length(titles) - length(dates) + 1):length(titles)]
+        }
         
         # Build the PR URLs
         pr_links <- paste0(homepage_link, date_strings)
@@ -860,7 +905,7 @@ edgecase_scraper <- function(info, start_date, end_date,
 
 # edgecase_scraper(info_crane, "2024-11-01", "2025-02-15")
 
-edgecase_scraper(info_crane, "2025-03-06", "2025-03-08")
+# edgecase_scraper(info_crane, "2025-03-06", "2025-03-08")
 ```
 
 
@@ -888,7 +933,7 @@ member_scraper <- function(info, start_date, end_date, page_index=0,
   page_index_start <- info$page_index_start
   date_node <- info$date_node
   date_node_type <- info$date_node_type
-  date_format <- info$date_format
+  date_formats <- info$date_formats
   title_node <- info$title_node
   title_node_type <- info$title_node_type
   pr_link_node <- info$pr_link_node
@@ -920,13 +965,17 @@ member_scraper <- function(info, start_date, end_date, page_index=0,
     if(length(dates)==0) return(pressers)
 
     # Format the dates, also remove any likely non-date junk in our vector
-    # The longest normally formatted date (i.e. "September 31, 2025") is 18
+    # The longest normally formatted date (i.e. "September 31st, 2025") is 20
     # characters long
-    dates <- sapply(dates[nchar(dates)<=18], 
-                    function(x) as.character(strptime(x, f <- date_format, 
-                                                      tz = "")))
+    dates <- dates[which(!is.na(date_formats))] # Remove non-date elements
+    dates <- gsub("  ", " ", dates)
+    dates <- gsub("(\\d{1,2})(st|nd|rd|th)", "\\1", dates, perl = TRUE)
+    dates <- dates[nchar(dates)<=20]
+    dates <- mapply(function(x, fmt){ 
+                      as.character(strptime(x, format = fmt, tz = ""))
+                    }, 
+                    dates, date_formats[which(!is.na(date_formats))])
 
-    
     if(head(dates, 1) > end_date & tail(dates, 1) > end_date){
       # Haven't reached a page in our date range; recurse on the next page
       return(rbind(pressers, member_scraper(info, start_date, end_date,
@@ -953,6 +1002,12 @@ member_scraper <- function(info, start_date, end_date, page_index=0,
         else titles <- current_page %>% html_elements(xpath=title_node)
         
         titles <- titles %>% html_text() %>% str_trim()
+        
+        # If titles has more elements than dates, grab the last elements
+        # corresponding to the number of dates--sometimes headers are scraped before titles
+        if(length(titles) > length(dates)){
+          titles <- titles[(length(titles) - length(dates) + 1):length(titles)]
+        }
         
         # Get PR links
         if(pr_link_node_type=="css") pr_links <- current_page %>% html_elements(pr_link_node)
@@ -1019,14 +1074,15 @@ member_scraper <- function(info, start_date, end_date, page_index=0,
   return(pressers)
 }
 
-# info <- node_hunter(link="barrymoore.house.gov", debug=T)
-# 
-# member_scraper(info=info,
-#                start_date="2025-01-01", end_date=Sys.Date(),
-#                            pressers=data.frame(date=c(), title=c(), body=c(),
-#                                                tags=c(), url=c()),
-#                            debug=T, progress=T)
+info <- node_hunter(link="hamadeh.house.gov", debug=T)
 
+member_scraper(info=info,
+               start_date="2025-01-01", end_date=Sys.Date(),
+                           pressers=data.frame(date=c(), title=c(), body=c(),
+                                               tags=c(), url=c()),
+                           debug=T, progress=T)
+
+# TODO: Fix URL mismatch
 ```
 
 ### Main scraper
@@ -1037,7 +1093,7 @@ presser_scraper <- function(links, start_date, end_date=Sys.Date(),
                             progress=T, remove_duplicates=F,
                             log_fails=F){
   
-  if(start_date > end_date) stop("Start date is after end date")
+  if(start_date > end_date) stop("Start date is after end date.")
   
   if(as.Date(end_date) > Sys.Date()){
     end_date <- Sys.Date()
@@ -1170,3 +1226,5 @@ TODO: MAYBE ADD OPTION TO NOT SCRAPE TAGS SINCE IT'S O(N^2)
 TODO: EXTRACT NAME, DISTRICT FROM WEBPAGE OR PRESSER TEXT, AT LEAST LAST NAME FROM URL
 
 TODO: FIGURE OUT RUNNING ID SYSTEM
+
+TODO: HAMADEH.HOUSE.GOV ISSUE TAGS, SAME ELEMENT AS TITLES (.font-weight-bold)
