@@ -168,9 +168,10 @@ format_pr_link <- function(pr_links, pr_page_link) {
   return(retVal[!is.na(retVal)])
 }
 
+# TESTING
+
 # format_pr_link("/2025/3/rep-sewell-introduces-the-john-r-lewis-voting-rights-advancement-act-ahead-of-the-60th-anniversary-of-bloody-sunday",
 #                 "https://sewell.house.gov/media/press-releases")
-
 
 # format_pr_link("/media-center/press-releases/amata-s-igia-message-calls-fishing-restoration-and-remember-us",
 #                "https://radewagen.house.gov/media/press-releases")
@@ -344,17 +345,19 @@ presser_page_finder <- function(link, debug = FALSE) {
   return(NULL)
 }
 
+# TESTING
+
 # presser_page_finder("https://crane.house.gov", debug=T)
 
 #presser_page_finder("https://mikerogers.house.gov", debug=T)
 # 
 # 
 #presser_page_finder("https://steil.house.gov")
-presser_page_finder("https://crawford.house.gov", debug=T)
-
-read_html("https://crawford.house.gov/") %>% html_elements(".ml-auto") %>% 
-  html_attr("href")
-.ml-auto > div:nth-child(2) > div:nth-child(3) > div:nth-child(3) > a:nth-child(2)
+# presser_page_finder("https://crawford.house.gov", debug=T)
+# 
+# read_html("https://crawford.house.gov/") %>% html_elements(".ml-auto") %>% 
+#   html_attr("href")
+# .ml-auto > div:nth-child(2) > div:nth-child(3) > div:nth-child(3) > a:nth-child(2)
 ```
 
 
@@ -717,12 +720,13 @@ node_hunter(link="hamadeh.house.gov", debug=T)
 read_html("https://hamadeh.house.gov/media/press-releases") %>%
   html_elements(".views-row .font-weight-bold a") %>% html_text()
 
+# TESTING
 
 # node_hunter(link="sewell.house.gov", debug=T)
 
 # node_hunter(link="barrymoore.house.gov", debug=T)
 
-info_crane <- node_hunter(link="crane.house.gov", debug=T)
+# info_crane <- node_hunter(link="crane.house.gov", debug=T)
 ```
 
 ### Edgecase scraper
@@ -889,8 +893,10 @@ edgecase_scraper <- function(info, start_date, end_date,
   return(pressers %>% distinct(date, body, url, .keep_all=T))
 }
 
+# TESTING
+
 # edgecase_scraper(info_crane, "2024-11-01", "2025-02-15")
-edgecase_scraper(info_crane, "2025-01-01", "2025-03-08", debug=T)
+# edgecase_scraper(info_crane, "2025-01-01", "2025-03-08", debug=T)
 ```
 
 
@@ -1061,6 +1067,8 @@ member_scraper <- function(info, start_date, end_date, page_index=0,
   return(pressers)
 }
 
+# TESTING
+
 # info <- node_hunter(link="hamadeh.house.gov", debug=T)
 # 
 # member_scraper(info=info,
@@ -1144,25 +1152,21 @@ presser_scraper <- function(links, start_date, end_date=Sys.Date(),
   return(pressers)
 }
 
+# TESTING
+
 # presser_scraper(links=c(Schweikert="schweikert.house.gov",
 #                         Barry="barrymoore.house.gov"),
 #                 start_date="2025-01-01",
 #                 end_date=Sys.Date(), 
 #                 debug=F, progress=T, log_fails=F)
 
-presser_scraper(links="crane.house.gov",
-                start_date="2025-01-01",
-                end_date=Sys.Date(),
-                debug=T, progress=T, log_fails=F)
+# presser_scraper(links="crane.house.gov",
+#                 start_date="2025-01-01",
+#                 end_date=Sys.Date(),
+#                 debug=T, progress=T, log_fails=F)
 ```
 
-Failing V
-Found a direct press/news link on the main page: https://grijalva.house.gov/category/congress_press_release/
-URL: https://grijalva.house.gov/category/congress_press_release/?page=0
-Date node: .info-date
-Date formats: %B %d, %Y | %B %d, %Y | %B %d, %Y | %B %d, %Y | %B %d, %Y | %B %d, %Y | %B %d, %Y
-Scraping failed for: grijalva.house.gov
-
+### Testing
 ```{r}
 # test <- presser_scraper(links=house_links[11:20],
 #                         start_date="2025-01-01",
@@ -1175,33 +1179,9 @@ full_test <- presser_scraper(links=house_links,
                         debug=F, progress=T, log_fails=T)
 ```
 
-Previous: 105 failures
 
-
-```{r}
-read_html("https://schweikert.house.gov/category/congress_press_release/") %>% html_elements(".title a") %>%
-  html_attr("href")
-
-read_html("https://barrymoore.house.gov/media/press-releases/rep-barry-moores-bill-deport-illegals-who-drive-under-influence-passes-house") %>% html_node(".evo-press-release__body") %>% html_text()
-
-
-# EXAMPLE ISSUE TAG
-read_html("https://palmer.house.gov/media-center/press-releases/palmer-bill-reverse-biden-harris-doe-rule-passes-house") %>% html_node(".evo-press-release__field-evo-issues") %>% 
-  html_text() %>% str_trim()
-
-
-info
-
-temp <- read_html("https://barrymoore.house.gov/media/press-releases") %>% 
-  html_elements(".font-weight-bold a")
-
-read_html("https://barrymoore.house.gov/media/press-releases/media/press-releases/rep-barry-moore-supports-continuing-resolution-deliver-relief-producers-and") %>% html_element(".evo-press-release__body") %>% html_text()
-
-
-temp <- try(read_html("https://obama.house.gov"))
-
-temp[[1]] %>% str_trim()
-```
+## Notes
+Current failure rate: 105 failures, 23% of domains
 
 Removed from nodes.xlsx for now:
 dates	//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"col-auto\", \" \" ))]	xpath	F, G, J
