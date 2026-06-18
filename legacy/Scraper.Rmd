@@ -226,6 +226,7 @@ presser_page_finder <- function(link, debug = FALSE) {
     if (is.null(html_obj)) return(character(0))
     
     anchors <- html_elements(html_obj, "a[href]")
+    print(html_obj %>% html_attr("href") %>% html_text())
     if (length(anchors) == 0) return(character(0))
     
     txts  <- tolower(html_text(anchors, trim = TRUE))
@@ -272,10 +273,10 @@ presser_page_finder <- function(link, debug = FALSE) {
     if (debug) message("Home page is not available. Returning NULL.")
     return(NULL)
   }
-  
+  return(main_page)
   # 1) Look for press links on the main page
   press_links_main <- find_all_press_links(main_page, link)
-  print(main_page %>% html_elements("a[href]") %>% html_attr("href"))
+
   if (length(press_links_main) > 0) {
     best_press_link <- press_links_main[1]
     if (debug) message("Found a direct press/news link on the main page: ", best_press_link)
@@ -358,6 +359,27 @@ presser_page_finder <- function(link, debug = FALSE) {
 # read_html("https://crawford.house.gov/") %>% html_elements(".ml-auto") %>% 
 #   html_attr("href")
 # .ml-auto > div:nth-child(2) > div:nth-child(3) > div:nth-child(3) > a:nth-child(2)
+
+
+m <- presser_page_finder("https://crawford.house.gov", debug=T)
+
+m %>% html_attr("href")
+
+read_html("https://crawford.house.gov/") %>% 
+  html_nodes("a") %>% 
+  filter(html_text(.) == "Press Releases") %>% 
+  html_attr("href")
+
+
+m2 <- read_html("https://crawford.house.gov/") %>% html_nodes(".drop-down")
+
+# Find the specific link containing "Press Releases"
+m2 %>% keep(~ grepl("Press Releases", html_text(.), ignore.case = TRUE)) %>%
+  html_attr("href")
+
+# div.justify-end:nth-child(2) > div:nth-child(3) > div:nth-child(3) > a:nth-child(2)
+
+
 ```
 
 
@@ -1160,10 +1182,10 @@ presser_scraper <- function(links, start_date, end_date=Sys.Date(),
 #                 end_date=Sys.Date(), 
 #                 debug=F, progress=T, log_fails=F)
 
-# presser_scraper(links="crane.house.gov",
-#                 start_date="2025-01-01",
-#                 end_date=Sys.Date(),
-#                 debug=T, progress=T, log_fails=F)
+presser_scraper(links="nikemawilliams.house.gov",
+                start_date="2025-01-01",
+                end_date=Sys.Date(),
+                debug=T, progress=T, log_fails=F)
 ```
 
 ### Testing
