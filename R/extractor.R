@@ -38,8 +38,10 @@ extractor_registry <- function() {
 }
 
 # Shared helper: turn a vector of hrefs into absolute URLs against a base.
+# Hrefs are trimmed first: some templates emit leading/trailing whitespace
+# (e.g. " /news/documentsingle.aspx?..."), which url_absolute() turns into NA.
 abs_urls <- function(href, base) {
-  rvest::url_absolute(href, base)
+  rvest::url_absolute(trimws(href), base)
 }
 
 # Shared helper: extract readable body text from the first selector that

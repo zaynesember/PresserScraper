@@ -32,10 +32,11 @@ guid_extractor <- function() {
 }
 
 guid_list_url <- function(home, home_doc) {
-  cands <- paste0(home, "/press-releases")
-  # Also try press-release links found on the homepage, stripped of any ?ID=.
+  cands <- paste0(home, c("/press-releases", "/media-center"))
+  # Also try press-release / media-center links found on the homepage, stripped
+  # of any ?ID= item query (some sites use /media-center as the listing base).
   href <- rvest::html_attr(rvest::html_elements(home_doc, "a[href]"), "href")
-  href <- href[!is.na(href) & grepl("press-release", href, ignore.case = TRUE)]
+  href <- href[!is.na(href) & grepl("press-release|media-center", href, ignore.case = TRUE)]
   cands <- unique(c(cands, sub("\\?.*$", "", abs_urls(href, home))))
 
   for (base in utils::head(cands, 4)) {
@@ -80,7 +81,7 @@ guid_list_items <- function(doc, list_url) {
 guid_id_items <- function(doc, base) {
   a <- rvest::html_elements(doc, "a[href]")
   href <- rvest::html_attr(a, "href")
-  is_item <- !is.na(href) & grepl(paste0("press-releases\\?id=", GUID_RE), href, ignore.case = TRUE)
+  is_item <- !is.na(href) & grepl(paste0("(press-releases|media-center)\\?id=", GUID_RE), href, ignore.case = TRUE)
   a <- a[is_item]
   href <- href[is_item]
   if (length(a) == 0) return(empty_items())

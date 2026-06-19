@@ -29,6 +29,9 @@ generic_list_url <- function(home, home_doc) {
   score[grepl("/news|/media", href, ignore.case = TRUE) & score == 0L] <- 1L
   cand <- unique(href[score > 0][order(-score[score > 0])])
   cand <- cand[!is.na(cand)]
+  # Drop single-item permalinks (?ID=<GUID>): they parse as a 1-item "listing"
+  # and would be wrongly accepted ahead of the real listing page.
+  cand <- cand[!grepl(paste0("\\?id=", GUID_RE), cand, ignore.case = TRUE)]
   if (length(cand) == 0) return(NULL)
 
   for (url in utils::head(cand, 6)) {
@@ -71,7 +74,9 @@ generic_fetch_page <- function(list_url, page) {
 
 generic_list_items <- function(doc, list_url) {
   base <- strsplit(list_url, GENERIC_SEP, fixed = TRUE)[[1]][1]
-  listing_path <- sub("\\?.*$", "", sub("^https?://[^/]+", "", base))
+  # Strip query and any trailing slash: a listing href like ".../press-releases/"
+  # must still match item links ".../press-releases/<slug>" in the filter below.
+  listing_path <- sub("/+$", "", sub("\\?.*$", "", sub("^https?://[^/]+", "", base)))
 
   # Primary: heading-link titles (clean, low false-positive).
   out <- generic_items_from_links(

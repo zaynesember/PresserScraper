@@ -51,6 +51,6 @@ cms_markers <- function(doc) {
     aspx = grepl("documentsingle\\.aspx|documentquery\\.aspx|DocumentID=", html, ignore.case = TRUE),
     wordpress = grepl("/wp-content/|/wp-json/|wp-includes", html, ignore.case = TRUE),
     drupal = grepl("views-row|views-field|/sites/default/files|Drupal\\.settings|drupal-", html, ignore.case = TRUE),
-    guid = grepl(paste0("press-releases\\?id=", GUID_RE), html, ignore.case = TRUE)
+    guid = grepl(paste0("(press-releases|media-center)\\?id=", GUID_RE), html, ignore.case = TRUE)
   )
 }
