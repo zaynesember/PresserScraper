@@ -78,18 +78,25 @@ wp_list_items <- function(page, list_url) {
   )
 }
 
-# Per-post issue tags from the embedded category/tag terms (?_embed=wp:term).
-# Returns one cleaned tag string per post (NA when only type labels remain).
+# Per-post issue tags from the embedded terms (?_embed=wp:term). WordPress
+# offices file issue areas inconsistently: some use the curated *category*
+# taxonomy, others leave categories as type labels and put issues in the
+# free-form *post_tag* taxonomy (which is also where keyword noise lives). So
+# prefer categories, and fall back to post_tags only when categories yield
+# nothing substantive. Returns one cleaned tag string per post.
 wp_rest_tags <- function(page) {
   n <- length(page$date)
   wt <- page[["_embedded"]][["wp:term"]]
   if (is.null(wt)) return(rep(NA_character_, n))
   vapply(seq_len(n), function(i) {
     entry <- if (length(wt) >= i) wt[[i]] else NULL
-    names <- unlist(lapply(entry, function(tf) {
-      if (is.data.frame(tf) && nrow(tf) > 0 && !is.null(tf$name)) tf$name else NULL
+    by_tax <- function(tax) unlist(lapply(entry, function(tf) {
+      if (is.data.frame(tf) && nrow(tf) > 0 && !is.null(tf$name) &&
+          !is.null(tf$taxonomy) && tf$taxonomy[1] == tax) tf$name else NULL
     }))
-    clean_issue_tags(names)
+    from_cat <- clean_issue_tags(by_tax("category"))
+    if (!is.na(from_cat)) return(from_cat)
+    clean_issue_tags(by_tax("post_tag"))
   }, character(1))
 }
 

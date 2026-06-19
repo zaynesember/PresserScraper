@@ -30,6 +30,24 @@ test_that("WordPress per-post tags come from embedded terms", {
   expect_false(any(grepl("Press Release|In The News", items$tags, ignore.case = TRUE), na.rm = TRUE))
 })
 
+test_that("wp_rest_tags prefers categories, falls back to post_tags", {
+  mk <- function(cat, tag) {
+    list(
+      date = "2026-01-01",
+      `_embedded` = list(`wp:term` = list(list(
+        data.frame(name = cat, taxonomy = rep("category", length(cat)), stringsAsFactors = FALSE),
+        data.frame(name = tag, taxonomy = rep("post_tag", length(tag)), stringsAsFactors = FALSE)
+      )))
+    )
+  }
+  # substantive category present -> use it, ignore noisy post_tags
+  p1 <- mk(c("Press Release", "Energy and Environment"), c("Lyft", "Uber"))
+  expect_equal(wp_rest_tags(p1), "Energy and Environment")
+  # category is only a type label -> fall back to post_tags (issues filed there)
+  p2 <- mk(c("Press Release"), c("Transportation", "Healthcare"))
+  expect_equal(wp_rest_tags(p2), "Transportation;Healthcare")
+})
+
 test_that("nextwp per-post tags come from WordPress categories", {
   j <- rj("gql_nextwp_cats.json")
   items <- nextwp_nodes_to_items(j$data$posts$nodes)
