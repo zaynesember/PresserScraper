@@ -5,11 +5,18 @@
 \title{List current U.S. Senators and their websites}
 \usage{
 list_senators(
-  url = "https://www.senate.gov/general/contact_information/senators_cfm.xml"
+  url = "https://www.senate.gov/general/contact_information/senators_cfm.xml",
+  committees = TRUE
 )
 }
 \arguments{
 \item{url}{The Senate directory XML (override only for testing).}
+
+\item{committees}{Whether to enrich each senator with their committee
+assignments (a \code{";"}-delimited string in the \code{committee} column). Requires
+one extra fetch of the public \@unitedstates congressional dataset
+(\url{https://github.com/unitedstates/congress-legislators}); if it is
+unavailable, \code{committee} is left \code{NA} (no error).}
 }
 \value{
 A \link[tibble:tibble]{tibble} with columns \code{name}, \code{state}, \code{district},
