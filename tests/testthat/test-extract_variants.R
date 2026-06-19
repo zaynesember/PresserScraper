@@ -137,3 +137,20 @@ test_that("wp_press_post_type returns NULL when there is no press type (House)",
   ))
   expect_null(wp_press_post_type("https://x.house.gov"))
 })
+
+# --- generic canonical-path listing fallback (lee-style) ---------------------
+test_that("generic_try_listing returns a handle when a probed path has items", {
+  testthat::local_mocked_bindings(
+    get_html = function(url, timeout = 30) fixture_doc("list_datepath.html")
+  )
+  h <- generic_try_listing("https://x.senate.gov/press-releases")
+  expect_false(is.null(h))
+  expect_true(startsWith(h, "https://x.senate.gov/press-releases"))
+})
+
+test_that("generic_try_listing returns NULL when a probed path has no items", {
+  testthat::local_mocked_bindings(
+    get_html = function(url, timeout = 30) rvest::read_html("<html><body><nav>nav</nav></body></html>")
+  )
+  expect_null(generic_try_listing("https://x.senate.gov/news"))
+})

@@ -55,6 +55,14 @@ scrape_member <- function(url, from, to = Sys.Date(), cms = NULL,
     if (nrow(res2) > 0 || !needs_render(res2)) res <- res2
   }
 
+  # Generic fallback: a vendor extractor that returned nothing may be pointed at
+  # the wrong source (e.g. a stale REST feed while the live releases sit in an
+  # HTML /newsroom). Retry once with the generic extractor before giving up.
+  if (nrow(res) == 0 && !identical(attr(res, "cms_detected"), "generic")) {
+    res2 <- scrape_member_core(home, from, to, "generic", page_limit, fetch_bodies, quiet)
+    if (nrow(res2) > 0) res <- res2
+  }
+
   # Surface hard failures the way the static implementation always has, then
   # drop the internal status attributes before returning.
   if (!isTRUE(attr(res, "found_home"))) {
