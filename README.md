@@ -125,6 +125,11 @@ devtools::check()
 The original grad-school notebook implementation is preserved under
 [`legacy/`](legacy/) for reference.
 
+## Acknowledgements
+
+Some of the original legacy code (under [`legacy/`](legacy/)) was generously
+provided by Chris Stout.
+
 ## License
 
 MIT © Zayne Sember
