@@ -60,3 +60,33 @@ test_that("guid emits no tags (its issue links are navigation, not per-release)"
   res <- guid_extractor()$item_body(fixture_doc("item_guid.html"), "x")
   expect_true(is.na(res$tags))
 })
+
+test_that("wp_rest_tags reads a dedicated issue/topic taxonomy first", {
+  page <- list(
+    date = "2026-01-01",
+    `_embedded` = list(`wp:term` = list(list(
+      data.frame(name = "Press Releases", taxonomy = "category", stringsAsFactors = FALSE),
+      data.frame(name = c("Immigration", "Healthcare"), taxonomy = rep("issues", 2), stringsAsFactors = FALSE)
+    )))
+  )
+  expect_equal(wp_rest_tags(page), "Immigration;Healthcare")
+})
+
+test_that("clean_issue_tags decodes HTML entities from JSON-sourced names", {
+  expect_equal(clean_issue_tags("Foreign Affairs &amp; National Security"),
+               "Foreign Affairs & National Security")
+  expect_equal(clean_issue_tags("Veterans&#039; Affairs"), "Veterans' Affairs")
+})
+
+# --- Drupal per-release issue tags (House "evo" template) --------------------
+test_that("drupal extracts issue tags from the evo field, not the nav", {
+  # synthetic evo item page: a per-release issues field plus a site-wide nav
+  doc <- rvest::read_html(paste0(
+    '<html><body>',
+    '<nav><a href="/issues/budget">Budget</a><a href="/issues/health">Health</a></nav>',
+    '<div class="evo-press-release__field-evo-issues">Issues: ',
+    '<a href="/issues/veterans">Veterans</a></div></body></html>'
+  ))
+  res <- drupal_extractor()$item_body(doc, "x")
+  expect_equal(res$tags, "Veterans")
+})

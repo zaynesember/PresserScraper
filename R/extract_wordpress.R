@@ -125,13 +125,19 @@ wp_rest_tags <- function(page) {
   if (is.null(wt)) return(rep(NA_character_, n))
   vapply(seq_len(n), function(i) {
     entry <- if (length(wt) >= i) wt[[i]] else NULL
-    by_tax <- function(tax) unlist(lapply(entry, function(tf) {
+    # Term names from taxonomies whose slug satisfies `pred`.
+    names_where <- function(pred) unlist(lapply(entry, function(tf) {
       if (is.data.frame(tf) && nrow(tf) > 0 && !is.null(tf$name) &&
-          !is.null(tf$taxonomy) && tf$taxonomy[1] == tax) tf$name else NULL
+          !is.null(tf$taxonomy) && pred(tf$taxonomy[1])) tf$name else NULL
     }))
-    from_cat <- clean_issue_tags(by_tax("category"))
+    # 1. A dedicated issue/topic taxonomy is the explicit, cleanest source.
+    from_issue <- clean_issue_tags(names_where(function(t) grepl("issue|topic", t, ignore.case = TRUE)))
+    if (!is.na(from_issue)) return(from_issue)
+    # 2. Curated categories (release-type labels stripped by clean_issue_tags).
+    from_cat <- clean_issue_tags(names_where(function(t) t == "category"))
     if (!is.na(from_cat)) return(from_cat)
-    clean_issue_tags(by_tax("post_tag"))
+    # 3. Free-form post_tags, where some offices file issue areas.
+    clean_issue_tags(names_where(function(t) t == "post_tag"))
   }, character(1))
 }
 
