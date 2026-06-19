@@ -46,16 +46,48 @@ abs_urls <- function(href, base) {
 }
 
 # Shared helper: extract readable body text from the first selector that
-# yields content, used by several extractors.
+# yields content, used by several extractors. Navigation chrome (breadcrumbs,
+# menus, headers/footers, scripts) inside the chosen node is removed first so a
+# broad fallback selector like "main"/"#content" doesn't pollute the body.
 body_from_selectors <- function(doc, selectors) {
   for (sel in selectors) {
     node <- rvest::html_element(doc, sel)
     if (!is.na(node)) {
+      strip_chrome(node)
       txt <- trimws(rvest::html_text2(node))
       if (nzchar(txt)) return(txt)
     }
   }
   NA_character_
+}
+
+# Remove navigation/chrome descendants from a node in place (mutates the parsed
+# document, which is fine: item bodies are parsed fresh per release).
+strip_chrome <- function(node) {
+  junk <- rvest::html_elements(node, paste0(
+    "nav, header, footer, aside, script, style, form, noscript, ",
+    ".breadcrumb, .breadcrumbs, [class*='breadcrumb'], [aria-label*='readcrumb'], ",
+    ".sr-only, [class*='social-share'], [class*='share-'], [class*='skip-link']"
+  ))
+  if (length(junk) > 0) xml2::xml_remove(junk)
+  invisible(node)
+}
+
+# Normalise a set of taxonomy/category labels into an issue-tag string, dropping
+# release-type and administrative labels (e.g. "Press Release", "In the News",
+# "119th Congress"). Returns NA when nothing substantive remains.
+.tag_type_labels <- c(
+  "press release", "press releases", "press", "in the news", "in news",
+  "uncategorized", "news", "featured", "newsroom", "media", "media center",
+  "statement", "statements", "all"
+)
+clean_issue_tags <- function(x) {
+  x <- trimws(x[!is.na(x) & nzchar(trimws(x))])
+  x <- x[!(tolower(x) %in% .tag_type_labels)]
+  x <- x[!grepl("^[0-9]+(st|nd|rd|th)\\s+congress$", x, ignore.case = TRUE)]
+  x <- unique(x)
+  if (length(x) == 0) return(NA_character_)
+  paste(x, collapse = ";")
 }
 
 # Shared helper: collect tag/issue text from the first selector that matches.

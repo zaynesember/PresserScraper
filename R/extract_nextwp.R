@@ -55,7 +55,8 @@ nextwp_gql_page <- function(endpoint, after, first = NEXTWP_PER_PAGE) {
   afterval <- if (is.null(after)) "null" else paste0('"', after, '"')
   query <- sprintf(
     paste0("query{posts(first:%d,after:%s,where:{orderby:{field:DATE,order:DESC}})",
-           "{pageInfo{hasNextPage endCursor} nodes{date title link uri content}}}"),
+           "{pageInfo{hasNextPage endCursor} ",
+           "nodes{date title link uri content categories{nodes{name}}}}}"),
     as.integer(first), afterval
   )
   j <- nextwp_gql_post(endpoint, query)
@@ -86,6 +87,7 @@ nextwp_nodes_to_items <- function(nodes) {
   titles <- html_to_text(nodes$title)
   urls <- if (!is.null(nodes$link)) nodes$link else nodes$uri
   bodies <- if (!is.null(nodes$content)) html_to_text(nodes$content) else NA_character_
+  tags <- nextwp_node_tags(nodes)
 
   keep <- !is.na(dates) & !is.na(urls) & nzchar(urls)
   tibble::tibble(
@@ -93,6 +95,17 @@ nextwp_nodes_to_items <- function(nodes) {
     title = titles[keep],
     url = urls[keep],
     body = bodies[keep],
-    tags = NA_character_
+    tags = tags[keep]
   )
+}
+
+# Per-post issue tags from WordPress categories (the press-release "type"
+# categories like "Press" are dropped by clean_issue_tags).
+nextwp_node_tags <- function(nodes) {
+  cats <- nodes$categories$nodes
+  if (is.null(cats)) return(rep(NA_character_, nrow(nodes)))
+  vapply(seq_len(nrow(nodes)), function(i) {
+    nm <- tryCatch(cats[[i]]$name, error = function(e) NULL)
+    clean_issue_tags(nm)
+  }, character(1))
 }

@@ -25,7 +25,7 @@ wp_list_url <- function(home, home_doc) {
   cats <- fetch_json(paste0(home, "/wp-json/wp/v2/categories?slug=", WP_PRESS_SLUG))
   catid <- if (!is.null(cats) && length(cats) > 0 && !is.null(cats$id)) cats$id[1] else NA
 
-  base <- paste0(home, "/wp-json/wp/v2/posts?orderby=date&order=desc&per_page=100")
+  base <- paste0(home, "/wp-json/wp/v2/posts?orderby=date&order=desc&per_page=100&_embed=wp:term")
   if (!is.na(catid)) base <- paste0(base, "&categories=", catid)
 
   probe <- fetch_json(paste0(base, "&page=1"))
@@ -74,8 +74,23 @@ wp_list_items <- function(page, list_url) {
     title = titles,
     url = page$link,
     body = bodies,
-    tags = NA_character_
+    tags = wp_rest_tags(page)
   )
+}
+
+# Per-post issue tags from the embedded category/tag terms (?_embed=wp:term).
+# Returns one cleaned tag string per post (NA when only type labels remain).
+wp_rest_tags <- function(page) {
+  n <- length(page$date)
+  wt <- page[["_embedded"]][["wp:term"]]
+  if (is.null(wt)) return(rep(NA_character_, n))
+  vapply(seq_len(n), function(i) {
+    entry <- if (length(wt) >= i) wt[[i]] else NULL
+    names <- unlist(lapply(entry, function(tf) {
+      if (is.data.frame(tf) && nrow(tf) > 0 && !is.null(tf$name)) tf$name else NULL
+    }))
+    clean_issue_tags(names)
+  }, character(1))
 }
 
 # Parse an Elementor "Posts" grid listing (article.elementor-post cards). Item

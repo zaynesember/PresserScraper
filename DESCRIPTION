@@ -23,7 +23,8 @@ Imports:
     rvest,
     stats,
     tibble,
-    utils
+    utils,
+    xml2
 Suggests:
     chromote,
     jsonlite,

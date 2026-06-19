@@ -169,10 +169,8 @@ guid_item_body <- function(doc, url) {
     "article",
     "main"
   ))
-  tags <- tags_from_selectors(doc, c(
-    ".issues a",
-    "a[href*='IssueID']",
-    "a[href*='issues']"
-  ))
-  list(body = body, tags = tags)
+  # No reliable per-release tags on this vendor: the only "issue" links are the
+  # site-wide issues navigation menu (e.g. "Issues", "All Issues"), so emitting
+  # them would falsely tag every release. Leave tags empty.
+  list(body = body, tags = NA_character_)
 }
