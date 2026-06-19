@@ -82,10 +82,16 @@ generic_list_items <- function(doc, list_url) {
 
   # Fallback: any in-listing link with substantial anchor text. Catches sites
   # whose item links aren't headings and/or use query-style item URLs.
-  generic_items_from_links(
+  out <- generic_items_from_links(
     rvest::html_elements(doc, "a[href]"),
     base, listing_path, min_title = 25
   )
+  if (nrow(out) > 0) return(out)
+
+  # Last resort: date-path item links (/YYYY/M/slug). These live off the listing
+  # path so the in-listing filter above misses them; the date is in the URL and
+  # adjacent text. Shared with the press-releases vendor extractor.
+  datepath_list_items(doc, base)
 }
 
 # Build an items tibble from candidate anchor nodes that descend from the

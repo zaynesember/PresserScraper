@@ -28,8 +28,21 @@ list_members <- function(url = "https://www.house.gov/representatives") {
 
   out <- out[!is.na(out$url) & nzchar(out$url), , drop = FALSE]
   out <- out[is_member_url(out$url), , drop = FALSE]
+  out <- out[!is_non_member_host(out$url), , drop = FALSE]
   out <- out[!duplicated(out$url), , drop = FALSE]
   tibble::as_tibble(out)
+}
+
+# Administrative *.house.gov hosts that are syntactically valid member URLs but
+# are not representatives (they can appear linked from the directory page).
+.non_member_hosts <- c(
+  "clerk", "speaker", "democraticleader", "republicanleader",
+  "majorityleader", "majoritywhip", "democraticwhip", "republicanwhip"
+)
+
+is_non_member_host <- function(url) {
+  host <- sub("^https://([^.]+)\\.house\\.gov$", "\\1", normalize_home(url))
+  host %in% .non_member_hosts
 }
 
 # Parse a single state table from the directory into member rows.

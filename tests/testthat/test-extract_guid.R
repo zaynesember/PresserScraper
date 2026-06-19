@@ -28,11 +28,24 @@ test_that("guid item_body extracts the release text, not the page chrome", {
   expect_false(grepl("^\\?xml|Menu|Skip to", res$body))
 })
 
-test_that("guid page_url paginates 1-based via Page", {
+test_that("guid fetch_page uses the embedded pager param, 1-based", {
+  calls <- new.env()
+  testthat::local_mocked_bindings(get_html = function(url, timeout = 30) {
+    calls$url <- url
+    NULL
+  })
   ex <- guid_extractor()
-  base <- "https://x.house.gov/press-releases"
-  expect_equal(ex$page_url(base, 0), base)
-  expect_equal(ex$page_url(base, 2), paste0(base, "?Page=3"))
+  handle <- paste0("https://x.house.gov/press-releases", GUID_SEP, "page")
+  ex$fetch_page(handle, 0)
+  expect_equal(calls$url, "https://x.house.gov/press-releases")
+  ex$fetch_page(handle, 2)
+  expect_equal(calls$url, "https://x.house.gov/press-releases?page=3")
+})
+
+test_that("guid fetch_page stops paging when no pager param was found", {
+  ex <- guid_extractor()
+  handle <- paste0("https://x.house.gov/press-releases", GUID_SEP, "")
+  expect_null(ex$fetch_page(handle, 1))  # single-page listing
 })
 
 test_that("guid_infer_yearless picks the most recent non-future year", {
