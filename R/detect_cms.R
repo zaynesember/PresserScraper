@@ -7,8 +7,8 @@
 #'
 #' @param url Member homepage URL. Ignored if `doc` is supplied.
 #' @param doc Optional pre-fetched `xml_document` (avoids a second request).
-#' @return One of `"drupal"`, `"aspx"`, `"wordpress"`, `"generic"`, or
-#'   `"unknown"` (when the page could not be fetched).
+#' @return One of `"drupal"`, `"aspx"`, `"wordpress"`, `"guid"`, `"generic"`,
+#'   or `"unknown"` (when the page could not be fetched).
 #' @examples
 #' \dontrun{
 #' detect_cms("https://barrymoore.house.gov")  # "drupal"
@@ -32,6 +32,9 @@ detect_cms <- function(url, doc = NULL) {
   if (ev$wordpress) return("wordpress")
   if (ev$drupal) return("drupal")
 
+  # GUID-id vendor: /press-releases?ID=<GUID> item links and no other signal.
+  if (ev$guid) return("guid")
+
   "generic"
 }
 
@@ -47,6 +50,7 @@ cms_markers <- function(doc) {
     generator = gen,
     aspx = grepl("documentsingle\\.aspx|documentquery\\.aspx|DocumentID=", html, ignore.case = TRUE),
     wordpress = grepl("/wp-content/|/wp-json/|wp-includes", html, ignore.case = TRUE),
-    drupal = grepl("views-row|views-field|/sites/default/files|Drupal\\.settings|drupal-", html, ignore.case = TRUE)
+    drupal = grepl("views-row|views-field|/sites/default/files|Drupal\\.settings|drupal-", html, ignore.case = TRUE),
+    guid = grepl(paste0("press-releases\\?id=", GUID_RE), html, ignore.case = TRUE)
   )
 }

@@ -12,8 +12,8 @@ detect_cms(url, doc = NULL)
 \item{doc}{Optional pre-fetched \code{xml_document} (avoids a second request).}
 }
 \value{
-One of \code{"drupal"}, \code{"aspx"}, \code{"wordpress"}, \code{"generic"}, or
-\code{"unknown"} (when the page could not be fetched).
+One of \code{"drupal"}, \code{"aspx"}, \code{"wordpress"}, \code{"guid"}, \code{"generic"},
+or \code{"unknown"} (when the page could not be fetched).
 }
 \description{
 Inspects a homepage's \verb{<meta name="generator">} tag and a set of markup

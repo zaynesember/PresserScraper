@@ -17,9 +17,10 @@ A survey of the chamber shows House sites cluster into a few vendor families:
 | **Drupal** (official House template) | ~54% | `/media/press-releases` listing, `?page=N` pagination |
 | **ASP.NET** ("DocumentID") | ~20% | `documentquery.aspx` listing, `documentsingle.aspx` items |
 | **WordPress** | ~12% | `wp-json` REST API (`congress_press_release` category) |
+| **GUID-id** | small | `/press-releases?ID=<GUID>` listing, `?Page=N`; year-less dates inferred |
 | **Other** | ~14% | generic heuristic extractor (heading-link titles + nearest date) |
 
-Three vendor extractors plus one generic fallback cover the whole chamber.
+Four vendor extractors plus one generic fallback cover the whole chamber.
 Pages are fetched statically by default; a headless-browser fallback
 ([`render_html()`], via the suggested **chromote** package) is available for the
 rare JS-rendered site.

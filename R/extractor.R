@@ -32,6 +32,7 @@ extractor_registry <- function() {
     drupal    = drupal_extractor(),
     aspx      = aspx_extractor(),
     wordpress = wordpress_extractor(),
+    guid      = guid_extractor(),
     generic   = generic_extractor()
   )
 }
