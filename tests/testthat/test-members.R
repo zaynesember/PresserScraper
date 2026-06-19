@@ -1,3 +1,19 @@
+test_that("normalize_home handles House and Senate hosts (and www/paths)", {
+  expect_equal(normalize_home("barrymoore.house.gov"), "https://barrymoore.house.gov")
+  expect_equal(normalize_home("https://www.baldwin.senate.gov/"), "https://baldwin.senate.gov")
+  expect_equal(normalize_home("https://alsobrooks.senate.gov/news/press-releases/x"),
+               "https://alsobrooks.senate.gov")
+  expect_equal(normalize_home("https://www.cruz.senate.gov"), "https://cruz.senate.gov")
+})
+
+test_that("is_member_url accepts House and Senate, rejects others", {
+  expect_true(is_member_url("https://barrymoore.house.gov"))
+  expect_true(is_member_url("https://www.baldwin.senate.gov/"))
+  expect_true(is_member_url("cruz.senate.gov"))
+  expect_false(is_member_url("https://www.house.gov"))      # chamber root, not a member
+  expect_false(is_member_url("https://example.com"))
+})
+
 test_that("is_non_member_host flags administrative house.gov hosts", {
   expect_true(is_non_member_host("https://clerk.house.gov"))
   expect_true(is_non_member_host("speaker.house.gov"))

@@ -1,12 +1,14 @@
 # pressR
 
-Automating the collection of U.S. House members' press releases.
+Automating the collection of U.S. Congress members' press releases.
 
-`pressR` scrapes press releases from the ~440 U.S. House of
-Representatives members' `*.house.gov` websites over a date range and returns a
-tidy data frame. Instead of guessing among dozens of CSS/XPath selectors per
-site, it **detects the content-management system** behind each site and routes
-to a dedicated extractor.
+`pressR` scrapes press releases from U.S. House (`*.house.gov`) and Senate
+(`*.senate.gov`) members' websites over a date range and returns a tidy data
+frame. Instead of guessing among dozens of CSS/XPath selectors per site, it
+**detects the content-management system** behind each site and routes to a
+dedicated extractor. House coverage is ~99%; Senate support is newer (the same
+extractors already handle ~half the chamber, with vendor-specific tail work in
+progress).
 
 ## Why CMS detection
 
@@ -58,6 +60,10 @@ res <- scrape_pressers(
 
 # The whole House (optionally capped for a quick sample)
 all <- scrape_house(from = "2026-01-01", max_members = 50)
+
+# The Senate works the same way (same extractors, plus a `chamber` column)
+senators <- list_senators()
+sen <- scrape_senate(from = "2026-01-01", max_members = 50)
 ```
 
 Every release-returning function yields columns `date`, `title`, `body`,

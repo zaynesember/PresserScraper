@@ -113,6 +113,30 @@ scrape_house <- function(from, to = Sys.Date(), max_members = NULL,
                   fails_path = fails_path, quiet = quiet)
 }
 
+#' Scrape press releases for the whole U.S. Senate
+#'
+#' Convenience wrapper that pulls the current senator directory with
+#' [list_senators()] and scrapes it with [scrape_pressers()].
+#'
+#' @inheritParams scrape_pressers
+#' @param max_members Optionally cap the number of senators (e.g. for a quick
+#'   sample); `NULL` scrapes everyone.
+#' @return See [scrape_pressers()].
+#' @seealso [scrape_house()] for the House.
+#' @export
+scrape_senate <- function(from, to = Sys.Date(), max_members = NULL,
+                          fetch_bodies = TRUE, page_limit = 100,
+                          render = c("auto", "never", "always"),
+                          log_fails = FALSE, fails_path = "fails.csv",
+                          quiet = FALSE) {
+  render <- match.arg(render)
+  members <- list_senators()
+  if (!is.null(max_members)) members <- utils::head(members, max_members)
+  scrape_pressers(members, from = from, to = to, fetch_bodies = fetch_bodies,
+                  page_limit = page_limit, render = render, log_fails = log_fails,
+                  fails_path = fails_path, quiet = quiet)
+}
+
 # Coerce the `members` argument into a metadata tibble with a `url` column.
 normalize_members <- function(members) {
   if (is.data.frame(members)) {

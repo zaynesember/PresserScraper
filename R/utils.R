@@ -16,20 +16,22 @@
 # Strip a trailing slash (or several) from a URL.
 trim_slash <- function(x) sub("/+$", "", x)
 
-# Normalise a member homepage to its bare `https://name.house.gov` form.
-# Vectorised over `url`.
+# Normalise a member homepage to its bare `https://name.house.gov` or
+# `https://name.senate.gov` form (drops a path and a leading `www.`, which the
+# Senate directory includes on some hosts). Vectorised over `url`.
 normalize_home <- function(url) {
   url <- trimws(as.character(url))
   needs <- !is.na(url) & !grepl("^https?://", url)
   url[needs] <- paste0("https://", url[needs])
-  # Drop anything tacked on after the house.gov host.
-  url <- sub("(house\\.gov).*", "\\1", url)
+  # Drop anything tacked on after the chamber host, then a leading www.
+  url <- sub("((house|senate)\\.gov).*", "\\1", url)
+  url <- sub("^(https?://)www\\.", "\\1", url)
   trim_slash(url)
 }
 
-# TRUE for a syntactically valid member homepage.
+# TRUE for a syntactically valid member homepage (House or Senate).
 is_member_url <- function(url) {
-  grepl("^https://[a-zA-Z0-9-]+\\.house\\.gov$", normalize_home(url))
+  grepl("^https://[a-zA-Z0-9-]+\\.(house|senate)\\.gov$", normalize_home(url))
 }
 
 # Extract `https://host` from a full URL.
