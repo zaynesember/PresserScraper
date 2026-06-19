@@ -1,14 +1,14 @@
 Package: pressR
-Title: Scrape Press Releases from U.S. House Members' Websites
+Title: Scrape Press Releases from U.S. Congress Members' Websites
 Version: 0.1.0
 Authors@R:
     person("Zayne", "Sember", , "zaynesember@gmail.com", role = c("aut", "cre"))
-Description: Collects press releases from United States House of
-    Representatives members' .house.gov websites over a date range. Detects
-    the content-management system behind each site (Drupal, ASP.NET,
-    WordPress, or a generic fallback) and routes to a dedicated extractor,
-    fetching pages statically by default and falling back to a headless
-    browser only where required.
+Description: Collects press releases from United States Congress members'
+    websites (House '.house.gov' and Senate '.senate.gov') over a date
+    range. Detects the content-management system behind each site (Drupal,
+    ASP.NET, WordPress, or a generic fallback) and routes to a dedicated
+    extractor, fetching pages statically by default and falling back to a
+    headless browser only where required.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

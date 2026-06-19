@@ -110,3 +110,47 @@ test_that("wp_item_body extracts the Elementor post content", {
   res <- wp_item_body(fixture_doc("item_wp_elementor.html"), "x")
   expect_gt(nchar(res$body), 200)
 })
+
+# --- Senate WordPress custom post type discovery -----------------------------
+test_that("wp_press_post_type picks the press-release type, not op-eds/news-clips", {
+  testthat::local_mocked_bindings(fetch_json = function(url, timeout = 30) list(
+    post = list(rest_base = "posts"),
+    `press-releases` = list(rest_base = "press_releases"),
+    in_the_news = list(rest_base = "in_the_news"),
+    op_eds = list(rest_base = "op_eds")
+  ))
+  expect_equal(wp_press_post_type("https://x.senate.gov"), "press_releases")
+})
+
+test_that("wp_press_post_type falls back to a 'news' type", {
+  testthat::local_mocked_bindings(fetch_json = function(url, timeout = 30) list(
+    post = list(rest_base = "posts"),
+    news = list(rest_base = "news"),
+    in_the_news = list(rest_base = "in_the_news")
+  ))
+  expect_equal(wp_press_post_type("https://x.senate.gov"), "news")
+})
+
+test_that("wp_press_post_type returns NULL when there is no press type (House)", {
+  testthat::local_mocked_bindings(fetch_json = function(url, timeout = 30) list(
+    post = list(rest_base = "posts"), page = list(rest_base = "pages")
+  ))
+  expect_null(wp_press_post_type("https://x.house.gov"))
+})
+
+# --- generic canonical-path listing fallback (lee-style) ---------------------
+test_that("generic_try_listing returns a handle when a probed path has items", {
+  testthat::local_mocked_bindings(
+    get_html = function(url, timeout = 30) fixture_doc("list_datepath.html")
+  )
+  h <- generic_try_listing("https://x.senate.gov/press-releases")
+  expect_false(is.null(h))
+  expect_true(startsWith(h, "https://x.senate.gov/press-releases"))
+})
+
+test_that("generic_try_listing returns NULL when a probed path has no items", {
+  testthat::local_mocked_bindings(
+    get_html = function(url, timeout = 30) rvest::read_html("<html><body><nav>nav</nav></body></html>")
+  )
+  expect_null(generic_try_listing("https://x.senate.gov/news"))
+})

@@ -17,21 +17,56 @@ wordpress_extractor <- function() {
   )
 }
 
-# Returns a posts-endpoint base URL (with the press-release category applied
-# when resolvable). If the REST API is unavailable (some sites block it with a
-# 401/403), falls back to an "html::" handle for the Elementor "Posts" grid.
-# NULL only if neither path works.
+# Press-release custom post types, in preference order. Senate WordPress sites
+# keep releases in one of these (the default `posts` feed there is stale or
+# non-press); op-ed / in-the-news / newsletter types are deliberately excluded.
+WP_PRESS_TYPES <- c("press_releases", "press_release", "news", "statements", "statement")
+
+# Build a REST posts-endpoint base URL for a given rest_base post type.
+wp_rest_base_url <- function(home, rest_base) {
+  paste0(home, "/wp-json/wp/v2/", rest_base,
+         "?orderby=date&order=desc&per_page=100&_embed=wp:term")
+}
+
+# rest_base of a press-release custom post type if the site defines one, else
+# NULL. Discovered from /wp-json/wp/v2/types so we don't guess the endpoint.
+wp_press_post_type <- function(home) {
+  types <- fetch_json(paste0(home, "/wp-json/wp/v2/types"))
+  if (is.null(types) || length(types) == 0) return(NULL)
+  keys <- names(types)
+  norm <- function(x) gsub("-", "_", tolower(x))
+  for (cand in WP_PRESS_TYPES) {
+    for (k in keys) {
+      rb <- tryCatch(types[[k]]$rest_base, error = function(e) NULL)
+      if (is.null(rb) || !nzchar(rb)) next
+      if (norm(k) == cand || norm(rb) == cand) return(rb)
+    }
+  }
+  NULL
+}
+
+# Returns a posts-endpoint base URL. Tries, in order: a press-release custom
+# post type (Senate WordPress), the default `posts` feed filtered to the
+# press-release category (House WordPress), then an "html::" Elementor fallback
+# when the REST API is blocked. NULL only if none work.
 wp_list_url <- function(home, home_doc) {
+  # 1. Custom post type (e.g. Senate `press_releases` / `news`).
+  rb <- wp_press_post_type(home)
+  if (!is.null(rb)) {
+    base <- wp_rest_base_url(home, rb)
+    probe <- fetch_json(paste0(base, "&page=1"))
+    if (!is.null(probe) && length(probe) > 0) return(base)
+  }
+
+  # 2. Default `posts` feed, optionally filtered to the House press category.
   cats <- fetch_json(paste0(home, "/wp-json/wp/v2/categories?slug=", WP_PRESS_SLUG))
   catid <- if (!is.null(cats) && length(cats) > 0 && !is.null(cats$id)) cats$id[1] else NA
-
-  base <- paste0(home, "/wp-json/wp/v2/posts?orderby=date&order=desc&per_page=100&_embed=wp:term")
+  base <- wp_rest_base_url(home, "posts")
   if (!is.na(catid)) base <- paste0(base, "&categories=", catid)
-
   probe <- fetch_json(paste0(base, "&page=1"))
   if (!is.null(probe) && length(probe) > 0) return(base)
 
-  # REST blocked/disabled: look for an Elementor-rendered listing page.
+  # 3. REST blocked/disabled: look for an Elementor-rendered listing page.
   cands <- paste0(home, c("/press-releases", "/news", "/category/press-releases"))
   href <- rvest::html_attr(rvest::html_elements(home_doc, "a[href]"), "href")
   href <- href[!is.na(href) & grepl("press-release", href, ignore.case = TRUE)]

@@ -11,8 +11,9 @@ list_members(url = "https://www.house.gov/representatives")
 }
 \value{
 A \link[tibble:tibble]{tibble} with columns \code{name}, \code{state}, \code{district},
-\code{party}, \code{committee}, and \code{url}. \code{committee} is a \code{";"}-delimited string of
-committee assignments (\code{NA} for leadership/vacant seats that list none).
+\code{party}, \code{committee}, \code{url}, and \code{chamber} (\code{"house"}). \code{committee} is a
+\code{";"}-delimited string of committee assignments (\code{NA} for leadership/vacant
+seats that list none).
 }
 \description{
 Scrapes \url{https://www.house.gov/representatives}, which lays out one table
@@ -23,4 +24,7 @@ committees. Returns one row per member with a cleaned homepage URL.
 \dontrun{
 members <- list_members()
 }
+}
+\seealso{
+\code{\link[=list_senators]{list_senators()}} for the Senate.
 }

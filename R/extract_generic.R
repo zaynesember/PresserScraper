@@ -32,17 +32,28 @@ generic_list_url <- function(home, home_doc) {
   # Drop single-item permalinks (?ID=<GUID>): they parse as a 1-item "listing"
   # and would be wrongly accepted ahead of the real listing page.
   cand <- cand[!grepl(paste0("\\?id=", GUID_RE), cand, ignore.case = TRUE)]
-  if (length(cand) == 0) return(NULL)
 
   for (url in utils::head(cand, 6)) {
-    doc <- get_html(url)
-    if (is.null(doc)) next
-    if (nrow(generic_list_items(doc, url)) > 0) {
-      param <- generic_find_pager(doc)
-      return(paste0(url, GENERIC_SEP, param %||% ""))
-    }
+    h <- generic_try_listing(url)
+    if (!is.null(h)) return(h)
+  }
+
+  # Fallback: common listing paths that may not be linked from the homepage
+  # (e.g. a site whose nav points at a landing page while the real list lives
+  # at /press-releases).
+  for (path in c("/press-releases", "/newsroom", "/news/press-releases", "/media/press-releases")) {
+    h <- generic_try_listing(paste0(home, path))
+    if (!is.null(h)) return(h)
   }
   NULL
+}
+
+# Probe one URL as a listing: returns the packed handle if it yields items.
+generic_try_listing <- function(url) {
+  doc <- get_html(url)
+  if (is.null(doc) || nrow(generic_list_items(doc, url)) == 0) return(NULL)
+  param <- generic_find_pager(doc)
+  paste0(url, GENERIC_SEP, param %||% "")
 }
 
 # Discover the pagination query-parameter name from a listing page's pager.
@@ -111,7 +122,9 @@ generic_items_from_links <- function(links, base, listing_path, min_title) {
     url <- abs_urls(href, base)
     if (!grepl(in_listing, url) || grepl("/table/?$", url)) return(NULL)
 
-    title <- trimws(rvest::html_text(link))
+    # Normalise whitespace and drop a leading date prefix some sites bake into
+    # the title anchor (e.g. "06.18.2026  Senators Collins, Bennet ...").
+    title <- strip_leading_date(trimws(gsub("\\s+", " ", rvest::html_text(link))))
     if (nchar(title) < min_title) return(NULL)
 
     date <- generic_item_date(link)

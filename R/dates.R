@@ -8,6 +8,8 @@
   "%m/%d/%Y %H:%M:%S",
   "%m/%d/%Y",
   "%m/%d/%y",             # 2-digit year, e.g. "5/28/26"
+  "%m.%d.%Y",             # dot-separated, e.g. "06.18.2026" (Senate sites)
+  "%m.%d.%y",             # dot-separated, 2-digit year, e.g. "06.18.26"
   "%d/%m/%Y",
   "%Y/%m/%d",
   "%B %d, %Y %H:%M:%S",  # "September 23, 2020 14:00:00"
@@ -26,14 +28,26 @@ clean_date_string <- function(x) {
   trimws(x)
 }
 
-# Expand a bare M/D/YY date to a 4-digit year so "%Y" parsing can't read the
-# 2-digit year as year 26. Follows strptime's %y pivot (00-68 -> 2000s).
+# Expand a bare M/D/YY or M.D.YY date to a 4-digit year so "%Y" parsing can't
+# read the 2-digit year as year 26. Follows strptime's %y pivot (00-68 -> 2000s).
+# Handles both "/" and "." separators (the latter used by some Senate sites).
 expand_2digit_year <- function(s) {
-  m <- regmatches(s, regexec("^(\\d{1,2})/(\\d{1,2})/(\\d{2})$", s))[[1]]
-  if (length(m) != 4) return(s)
-  yy <- as.integer(m[4])
+  m <- regmatches(s, regexec("^(\\d{1,2})([/.])(\\d{1,2})\\2(\\d{2})$", s))[[1]]
+  if (length(m) != 5) return(s)
+  sep <- m[3]
+  yy <- as.integer(m[5])
   yyyy <- if (yy <= 68) 2000L + yy else 1900L + yy
-  sprintf("%s/%s/%d", m[2], m[3], yyyy)
+  sprintf("%s%s%s%s%d", m[2], sep, m[4], sep, yyyy)
+}
+
+# Remove a leading date token (and any trailing separator) from a title string;
+# some listings prefix the title with the publish date in the same anchor.
+strip_leading_date <- function(title) {
+  # Optional trailing separator after the date (hyphen, colon, pipe, period).
+  pat <- paste0("^\\s*(?:", paste(.date_regexes, collapse = "|"),
+                ")\\s*[-:|.]?\\s*")
+  out <- trimws(sub(pat, "", title, perl = TRUE, ignore.case = TRUE))
+  if (nzchar(out)) out else trimws(title)
 }
 
 # Detect the first candidate format that parses a single string, else NA.
@@ -84,6 +98,7 @@ looks_dateish <- function(x) {
   "(?:January|February|March|April|May|June|July|August|September|October|November|December)\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+\\d{4}",
   "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+\\d{4}",
   "\\d{1,2}/\\d{1,2}/\\d{2,4}",
+  "\\d{1,2}\\.\\d{1,2}\\.\\d{2,4}",
   "\\d{4}-\\d{2}-\\d{2}"
 )
 

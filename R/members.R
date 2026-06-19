@@ -6,8 +6,10 @@
 #'
 #' @param url The directory page to scrape (override only for testing).
 #' @return A [tibble][tibble::tibble] with columns `name`, `state`, `district`,
-#'   `party`, `committee`, and `url`. `committee` is a `";"`-delimited string of
-#'   committee assignments (`NA` for leadership/vacant seats that list none).
+#'   `party`, `committee`, `url`, and `chamber` (`"house"`). `committee` is a
+#'   `";"`-delimited string of committee assignments (`NA` for leadership/vacant
+#'   seats that list none).
+#' @seealso [list_senators()] for the Senate.
 #' @examples
 #' \dontrun{
 #' members <- list_members()
@@ -31,6 +33,7 @@ list_members <- function(url = "https://www.house.gov/representatives") {
   out <- out[is_member_url(out$url), , drop = FALSE]
   out <- out[!is_non_member_host(out$url), , drop = FALSE]
   out <- out[!duplicated(out$url), , drop = FALSE]
+  out$chamber <- "house"
   tibble::as_tibble(out)
 }
 
@@ -42,7 +45,7 @@ list_members <- function(url = "https://www.house.gov/representatives") {
 )
 
 is_non_member_host <- function(url) {
-  host <- sub("^https://([^.]+)\\.house\\.gov$", "\\1", normalize_home(url))
+  host <- sub("^https://([^.]+)\\.(house|senate)\\.gov$", "\\1", normalize_home(url))
   host %in% .non_member_hosts
 }
 
