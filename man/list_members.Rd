@@ -11,7 +11,8 @@ list_members(url = "https://www.house.gov/representatives")
 }
 \value{
 A \link[tibble:tibble]{tibble} with columns \code{name}, \code{state}, \code{district},
-\code{party}, and \code{url}.
+\code{party}, \code{committee}, and \code{url}. \code{committee} is a \code{";"}-delimited string of
+committee assignments (\code{NA} for leadership/vacant seats that list none).
 }
 \description{
 Scrapes \url{https://www.house.gov/representatives}, which lays out one table

@@ -39,10 +39,10 @@ library(pressR)
 
 # Current members and their sites
 members <- list_members()
-#> # A tibble: 438 × 5
-#>   name           state   district party url
-#>   <chr>          <chr>   <chr>    <chr> <chr>
-#> 1 Moore, Barry   Alabama 1st      R     https://barrymoore.house.gov
+#> # A tibble: 437 × 6
+#>   name         state   district party committee           url
+#>   <chr>        <chr>   <chr>    <chr> <chr>               <chr>
+#> 1 Moore, Barry Alabama 1st      R     Agriculture;Judici… https://barrymoore.house.gov
 #> ...
 
 # One member

@@ -6,7 +6,8 @@
 #'
 #' @param url The directory page to scrape (override only for testing).
 #' @return A [tibble][tibble::tibble] with columns `name`, `state`, `district`,
-#'   `party`, and `url`.
+#'   `party`, `committee`, and `url`. `committee` is a `";"`-delimited string of
+#'   committee assignments (`NA` for leadership/vacant seats that list none).
 #' @examples
 #' \dontrun{
 #' members <- list_members()
@@ -82,6 +83,19 @@ parse_member_row <- function(tr, state) {
     state = state,
     district = district,
     party = party,
+    committee = parse_committee(cells),
     url = url
   )
+}
+
+# The directory's last column is "Committee Assignment" (pipe-delimited, e.g.
+# "Agriculture|Judiciary"); normalise to a ";"-delimited string for consistency
+# with the release `tags` column. NA for leadership/vacant rows that list none.
+parse_committee <- function(cells) {
+  if (length(cells) == 0) return(NA_character_)
+  raw <- cells[length(cells)]
+  is_phone <- grepl("^\\(?[0-9]{3}\\)?[ .-]?[0-9]{3}", raw)
+  is_room <- grepl("[A-Z]{2,4}HOB|^[0-9]{3,4}\\s", raw)
+  if (!nzchar(raw) || is_phone || is_room) return(NA_character_)
+  gsub("\\s*\\|\\s*", ";", trimws(raw))
 }
