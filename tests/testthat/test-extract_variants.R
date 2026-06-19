@@ -86,3 +86,27 @@ test_that("aspx infers year-less span.date labels newest-first (houlahan)", {
   expect_true(all(!is.na(items$date)))
   expect_true(all(diff(items$date) <= 0))  # newest-first, year-boundary safe
 })
+
+# --- WordPress Elementor HTML fallback when REST is blocked (clyburn) --------
+test_that("wp_elementor_items parses an Elementor Posts grid", {
+  items <- wp_elementor_items(
+    fixture_doc("list_wp_elementor.html"),
+    "https://clyburn.house.gov/press-releases"
+  )
+  expect_gt(nrow(items), 0)
+  expect_true(all(!is.na(items$date)))
+  expect_true(all(nzchar(items$title)))
+})
+
+test_that("wp_list_items routes an HTML document to the Elementor parser", {
+  items <- wp_list_items(
+    fixture_doc("list_wp_elementor.html"),
+    "html::https://clyburn.house.gov/press-releases"
+  )
+  expect_gt(nrow(items), 0)
+})
+
+test_that("wp_item_body extracts the Elementor post content", {
+  res <- wp_item_body(fixture_doc("item_wp_elementor.html"), "x")
+  expect_gt(nchar(res$body), 200)
+})
