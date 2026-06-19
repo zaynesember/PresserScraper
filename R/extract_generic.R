@@ -111,7 +111,9 @@ generic_items_from_links <- function(links, base, listing_path, min_title) {
     url <- abs_urls(href, base)
     if (!grepl(in_listing, url) || grepl("/table/?$", url)) return(NULL)
 
-    title <- trimws(rvest::html_text(link))
+    # Normalise whitespace and drop a leading date prefix some sites bake into
+    # the title anchor (e.g. "06.18.2026  Senators Collins, Bennet ...").
+    title <- strip_leading_date(trimws(gsub("\\s+", " ", rvest::html_text(link))))
     if (nchar(title) < min_title) return(NULL)
 
     date <- generic_item_date(link)
