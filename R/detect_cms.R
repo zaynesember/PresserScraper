@@ -35,6 +35,9 @@ detect_cms <- function(url, doc = NULL) {
   # GUID-id vendor: /press-releases?ID=<GUID> item links and no other signal.
   if (ev$guid) return("guid")
 
+  # Headless WordPress behind a Next.js SPA (data via /graphql, not in the HTML).
+  if (ev$nextjs) return("nextwp")
+
   "generic"
 }
 
@@ -51,6 +54,7 @@ cms_markers <- function(doc) {
     aspx = grepl("documentsingle\\.aspx|documentquery\\.aspx|DocumentID=", html, ignore.case = TRUE),
     wordpress = grepl("/wp-content/|/wp-json/|wp-includes", html, ignore.case = TRUE),
     drupal = grepl("views-row|views-field|/sites/default/files|Drupal\\.settings|drupal-", html, ignore.case = TRUE),
-    guid = grepl(paste0("(press-releases|media-center)\\?id=", GUID_RE), html, ignore.case = TRUE)
+    guid = grepl(paste0("(press-releases|media-center)\\?id=", GUID_RE), html, ignore.case = TRUE),
+    nextjs = grepl("__NEXT_DATA__", html, fixed = TRUE)
   )
 }

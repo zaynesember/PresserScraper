@@ -33,6 +33,7 @@ extractor_registry <- function() {
     aspx      = aspx_extractor(),
     wordpress = wordpress_extractor(),
     guid      = guid_extractor(),
+    nextwp    = nextwp_extractor(),
     generic   = generic_extractor()
   )
 }
