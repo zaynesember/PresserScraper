@@ -12,12 +12,20 @@
 #' @param page_limit Maximum listing pages to walk (safety bound).
 #' @param fetch_bodies If `FALSE`, skip fetching each release's body text
 #'   (faster; `body`/`tags` come back `NA`).
+#' @param render Headless-browser policy for JS-rendered sites. `"auto"` (the
+#'   default) does a static pass and, only if it finds *no* parseable releases
+#'   at all, retries once through a headless browser (when the suggested
+#'   \pkg{chromote} package is installed). `"never"` disables the fallback;
+#'   `"always"` renders from the start. The auto fallback does not fire merely
+#'   because a site has no releases in the date window.
 #' @param quiet Suppress progress messages.
 #' @return A [tibble][tibble::tibble] with columns `date`, `title`, `body`,
 #'   `tags`, `url`, `cms`. Zero rows if nothing falls in range.
 #' @export
 scrape_member <- function(url, from, to = Sys.Date(), cms = NULL,
-                          page_limit = 100, fetch_bodies = TRUE, quiet = FALSE) {
+                          page_limit = 100, fetch_bodies = TRUE,
+                          render = c("auto", "never", "always"), quiet = FALSE) {
+  render <- match.arg(render)
   from <- as.Date(from)
   to <- as.Date(to)
   if (from > to) cli::cli_abort("{.arg from} ({from}) is after {.arg to} ({to}).")
@@ -27,20 +35,67 @@ scrape_member <- function(url, from, to = Sys.Date(), cms = NULL,
     cli::cli_abort("{.val {url}} is not a valid '*.house.gov' member URL.")
   }
 
-  home_doc <- fetch_html(home)
-  if (is.null(home_doc)) cli::cli_abort("Could not fetch homepage {.url {home}}.")
+  have_chromote <- requireNamespace("chromote", quietly = TRUE)
+  if (render == "always" && !have_chromote) {
+    cli::cli_abort("{.arg render = \"always\"} needs the {.pkg chromote} package; install it first.")
+  }
+
+  # Static pass (or a forced render pass).
+  res <- if (render == "always") {
+    with_render(scrape_member_core(home, from, to, cms, page_limit, fetch_bodies, quiet))
+  } else {
+    scrape_member_core(home, from, to, cms, page_limit, fetch_bodies, quiet)
+  }
+
+  # Auto fallback: if a static pass turned up no parseable releases at all, the
+  # site likely renders its listing client-side -- retry once with a browser.
+  if (render == "auto" && needs_render(res) && have_chromote) {
+    if (!quiet) cli::cli_alert_info("{home}: nothing found statically; retrying with JS rendering.")
+    res2 <- with_render(scrape_member_core(home, from, to, cms, page_limit, fetch_bodies, quiet))
+    if (nrow(res2) > 0 || !needs_render(res2)) res <- res2
+  }
+
+  # Surface hard failures the way the static implementation always has, then
+  # drop the internal status attributes before returning.
+  if (!isTRUE(attr(res, "found_home"))) {
+    cli::cli_abort("Could not fetch homepage {.url {home}}.")
+  }
+  if (!isTRUE(attr(res, "found_listing"))) {
+    cli::cli_abort(
+      "Could not locate a press-release listing for {.url {home}} (cms: {attr(res, 'cms_detected')})."
+    )
+  }
+  strip_status(res)
+}
+
+# One end-to-end pass over a member site (static or, under with_render(), via a
+# browser). Never aborts: instead it tags the result with status attributes
+# (found_home, found_listing, saw_items, cms_detected) so the caller can decide
+# whether to retry, abort, or accept an empty result.
+scrape_member_core <- function(home, from, to, cms, page_limit, fetch_bodies, quiet) {
+  home_doc <- get_html(home)
+  if (is.null(home_doc)) {
+    return(with_status(empty_member_result(),
+                       found_home = FALSE, found_listing = FALSE,
+                       saw_items = FALSE, cms_detected = cms))
+  }
 
   if (is.null(cms)) cms <- detect_cms(doc = home_doc)
   ex <- get_extractor(cms)
 
   list_url <- ex$list_url(home, home_doc)
   if (is.null(list_url)) {
-    cli::cli_abort("Could not locate a press-release listing for {.url {home}} (cms: {cms}).")
+    return(with_status(empty_member_result(),
+                       found_home = TRUE, found_listing = FALSE,
+                       saw_items = FALSE, cms_detected = cms))
   }
 
   items <- walk_listing(ex, list_url, from, to, page_limit, home, quiet)
+  saw_items <- isTRUE(attr(items, "saw_items"))
   if (nrow(items) == 0) {
-    return(empty_member_result(cms))
+    return(with_status(empty_member_result(),
+                       found_home = TRUE, found_listing = TRUE,
+                       saw_items = saw_items, cms_detected = cms))
   }
 
   # API extractors return body/tags inline; HTML extractors need a per-item fetch.
@@ -49,7 +104,7 @@ scrape_member <- function(url, from, to = Sys.Date(), cms = NULL,
     tags <- if ("tags" %in% names(items)) items$tags else rep(NA_character_, nrow(items))
   } else if (fetch_bodies) {
     bodies <- purrr::map(items$url, function(u) {
-      doc <- fetch_html(u)
+      doc <- get_html(u)
       if (is.null(doc)) list(body = NA_character_, tags = NA_character_) else ex$item_body(doc, u)
     })
     body <- purrr::map_chr(bodies, "body")
@@ -59,7 +114,7 @@ scrape_member <- function(url, from, to = Sys.Date(), cms = NULL,
     tags <- rep(NA_character_, nrow(items))
   }
 
-  tibble::tibble(
+  out <- tibble::tibble(
     date = items$date,
     title = items$title,
     body = body,
@@ -67,6 +122,33 @@ scrape_member <- function(url, from, to = Sys.Date(), cms = NULL,
     url = items$url,
     cms = cms
   )
+  with_status(out, found_home = TRUE, found_listing = TRUE,
+              saw_items = TRUE, cms_detected = cms)
+}
+
+# TRUE when a pass found no parseable releases at all (no homepage, no listing,
+# or a listing that yielded zero items) -- the signal that a JS render might
+# help. A site with releases that simply fall outside the date window does not
+# count, so the fallback never fires for the common "nothing in range" case.
+needs_render <- function(res) {
+  !isTRUE(attr(res, "found_home")) ||
+    !isTRUE(attr(res, "found_listing")) ||
+    !isTRUE(attr(res, "saw_items"))
+}
+
+# Tag a result tibble with internal status attributes.
+with_status <- function(df, ...) {
+  status <- list(...)
+  for (nm in names(status)) attr(df, nm) <- status[[nm]]
+  df
+}
+
+# Remove the internal status attributes before returning to the user.
+strip_status <- function(df) {
+  for (nm in c("found_home", "found_listing", "saw_items", "cms_detected")) {
+    attr(df, nm) <- NULL
+  }
+  df
 }
 
 # Walk listing pages newest-first, collecting items within [from, to].
@@ -74,6 +156,7 @@ scrape_member <- function(url, from, to = Sys.Date(), cms = NULL,
 walk_listing <- function(ex, list_url, from, to, page_limit, home, quiet) {
   collected <- list()
   prev_urls <- character(0)
+  saw_items <- FALSE
   page <- 0L
   repeat {
     if (page > page_limit) {
@@ -87,6 +170,7 @@ walk_listing <- function(ex, list_url, from, to, page_limit, home, quiet) {
 
     items <- ex$list_items(page_obj, list_url)
     if (nrow(items) == 0) break
+    saw_items <- TRUE  # the listing yielded parseable releases (any date)
 
     # Guard against broken pagination that keeps returning the same page.
     if (identical(items$url, prev_urls)) break
@@ -105,12 +189,20 @@ walk_listing <- function(ex, list_url, from, to, page_limit, home, quiet) {
     page <- page + 1L
   }
 
-  if (length(collected) == 0) return(empty_items())
-  out <- dplyr::bind_rows(collected)
-  out[!duplicated(out$url), , drop = FALSE]
+  out <- if (length(collected) == 0) {
+    empty_items()
+  } else {
+    full <- dplyr::bind_rows(collected)
+    full[!duplicated(full$url), , drop = FALSE]
+  }
+  # Report whether the listing produced any releases at all, so scrape_member()
+  # can tell "nothing in range" (releases seen) from "nothing parseable"
+  # (a likely JS-rendered or unsupported site).
+  attr(out, "saw_items") <- saw_items
+  out
 }
 
-empty_member_result <- function(cms) {
+empty_member_result <- function() {
   tibble::tibble(
     date = as.Date(character(0)),
     title = character(0),

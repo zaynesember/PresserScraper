@@ -11,6 +11,7 @@ scrape_member(
   cms = NULL,
   page_limit = 100,
   fetch_bodies = TRUE,
+  render = c("auto", "never", "always"),
   quiet = FALSE
 )
 }
@@ -27,6 +28,13 @@ scrape_member(
 
 \item{fetch_bodies}{If \code{FALSE}, skip fetching each release's body text
 (faster; \code{body}/\code{tags} come back \code{NA}).}
+
+\item{render}{Headless-browser policy for JS-rendered sites. \code{"auto"} (the
+default) does a static pass and, only if it finds \emph{no} parseable releases
+at all, retries once through a headless browser (when the suggested
+\pkg{chromote} package is installed). \code{"never"} disables the fallback;
+\code{"always"} renders from the start. The auto fallback does not fire merely
+because a site has no releases in the date window.}
 
 \item{quiet}{Suppress progress messages.}
 }

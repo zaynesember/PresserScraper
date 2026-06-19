@@ -7,7 +7,7 @@ aspx_extractor <- function() {
   list(
     list_url   = aspx_list_url,
     page_url   = aspx_page_url,
-    fetch_page = function(list_url, page) fetch_html(aspx_page_url(list_url, page)),
+    fetch_page = function(list_url, page) get_html(aspx_page_url(list_url, page)),
     list_items = aspx_list_items,
     item_body  = aspx_item_body
   )
@@ -37,7 +37,7 @@ aspx_list_url <- function(home, home_doc) {
 
 # TRUE if a URL fetches to a page containing documentsingle item links.
 aspx_is_listing <- function(url) {
-  doc <- fetch_html(url)
+  doc <- get_html(url)
   !is.null(doc) && length(aspx_item_links(doc)) > 0
 }
 

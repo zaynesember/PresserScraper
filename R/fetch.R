@@ -3,6 +3,28 @@
   "+https://github.com/zaynesember/pressR)"
 )
 
+# Render mode flag. When active, get_html() routes through render_html() (a
+# headless browser) instead of a static fetch, so scrape_member() can retry a
+# JS-rendered site without the extractors knowing the difference.
+.pressR_render <- new.env(parent = emptyenv())
+.pressR_render$on <- FALSE
+
+# Evaluate `expr` with render mode enabled, restoring the previous mode after
+# (even on error). Used by scrape_member() for its JS fallback pass.
+with_render <- function(expr) {
+  old <- .pressR_render$on
+  .pressR_render$on <- TRUE
+  on.exit(.pressR_render$on <- old, add = TRUE)
+  expr
+}
+
+# Internal HTML fetcher used by the extractors. Honors the active render mode:
+# a static httr2 fetch normally, or a headless-browser render during a fallback
+# pass. Keeping this seam internal lets fetch_html() stay a pure static fetch.
+get_html <- function(url, timeout = 30) {
+  if (isTRUE(.pressR_render$on)) render_html(url) else fetch_html(url, timeout)
+}
+
 # Build a configured httr2 request: identity UA, timeout, polite throttle,
 # retry on transient failures, and optional on-disk caching for development.
 .build_request <- function(url, timeout = 30) {

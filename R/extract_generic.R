@@ -32,7 +32,7 @@ generic_list_url <- function(home, home_doc) {
   if (length(cand) == 0) return(NULL)
 
   for (url in utils::head(cand, 6)) {
-    doc <- fetch_html(url)
+    doc <- get_html(url)
     if (is.null(doc)) next
     if (nrow(generic_list_items(doc, url)) > 0) {
       param <- generic_find_pager(doc)
@@ -64,9 +64,9 @@ generic_fetch_page <- function(list_url, page) {
   base <- parts[1]
   param <- if (length(parts) > 1) parts[2] else ""
 
-  if (page == 0) return(fetch_html(base))
+  if (page == 0) return(get_html(base))
   if (!nzchar(param)) return(NULL)  # single-page site
-  fetch_html(add_query(base, param, page + 1))
+  get_html(add_query(base, param, page + 1))
 }
 
 generic_list_items <- function(doc, list_url) {

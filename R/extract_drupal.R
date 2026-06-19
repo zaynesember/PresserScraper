@@ -6,7 +6,7 @@ drupal_extractor <- function() {
   list(
     list_url   = drupal_list_url,
     page_url   = drupal_page_url,
-    fetch_page = function(list_url, page) fetch_html(drupal_page_url(list_url, page)),
+    fetch_page = function(list_url, page) get_html(drupal_page_url(list_url, page)),
     list_items = drupal_list_items,
     item_body  = drupal_item_body
   )
@@ -15,7 +15,7 @@ drupal_extractor <- function() {
 drupal_list_url <- function(home, home_doc) {
   # The official template is uniform; try the canonical path first.
   canonical <- paste0(home, "/media/press-releases")
-  if (!is.null(fetch_html(canonical))) return(canonical)
+  if (!is.null(get_html(canonical))) return(canonical)
 
   # Fall back to a press-releases link discovered on the homepage.
   href <- home_doc |>
