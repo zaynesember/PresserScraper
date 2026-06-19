@@ -10,6 +10,7 @@ scrape_pressers(
   to = Sys.Date(),
   fetch_bodies = TRUE,
   page_limit = 100,
+  render = c("auto", "never", "always"),
   log_fails = FALSE,
   fails_path = "fails.csv",
   quiet = FALSE
@@ -26,6 +27,12 @@ column plus any metadata columns to carry through (e.g. from
 \item{fetch_bodies}{Whether to fetch each release's body text.}
 
 \item{page_limit}{Per-member maximum listing pages to walk.}
+
+\item{render}{Headless-browser policy passed to \code{\link[=scrape_member]{scrape_member()}}
+(\code{"auto"}, \code{"never"}, or \code{"always"}). For large batch runs \code{"never"}
+avoids spawning a browser on the unsupported tail; the default \code{"auto"}
+only renders sites that yield nothing statically (and only if
+\pkg{chromote} is installed).}
 
 \item{log_fails}{If \code{TRUE}, write the failures table to \code{fails_path}.}
 

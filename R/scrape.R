@@ -12,6 +12,11 @@
 #' @param from,to Inclusive date range. `to` defaults to today.
 #' @param fetch_bodies Whether to fetch each release's body text.
 #' @param page_limit Per-member maximum listing pages to walk.
+#' @param render Headless-browser policy passed to [scrape_member()]
+#'   (`"auto"`, `"never"`, or `"always"`). For large batch runs `"never"`
+#'   avoids spawning a browser on the unsupported tail; the default `"auto"`
+#'   only renders sites that yield nothing statically (and only if
+#'   \pkg{chromote} is installed).
 #' @param log_fails If `TRUE`, write the failures table to `fails_path`.
 #' @param fails_path Path for the failures CSV when `log_fails = TRUE`.
 #' @param quiet Suppress per-member progress messages.
@@ -23,8 +28,10 @@
 #' @export
 scrape_pressers <- function(members, from, to = Sys.Date(),
                             fetch_bodies = TRUE, page_limit = 100,
+                            render = c("auto", "never", "always"),
                             log_fails = FALSE, fails_path = "fails.csv",
                             quiet = FALSE) {
+  render <- match.arg(render)
   from <- as.Date(from)
   to <- as.Date(to)
   if (from > to) cli::cli_abort("{.arg from} ({from}) is after {.arg to} ({to}).")
@@ -42,7 +49,7 @@ scrape_pressers <- function(members, from, to = Sys.Date(),
 
     res <- tryCatch(
       scrape_member(url, from = from, to = to, page_limit = page_limit,
-                    fetch_bodies = fetch_bodies, quiet = TRUE),
+                    fetch_bodies = fetch_bodies, render = render, quiet = TRUE),
       error = function(e) e
     )
 
@@ -95,12 +102,14 @@ scrape_pressers <- function(members, from, to = Sys.Date(),
 #' @export
 scrape_house <- function(from, to = Sys.Date(), max_members = NULL,
                          fetch_bodies = TRUE, page_limit = 100,
+                         render = c("auto", "never", "always"),
                          log_fails = FALSE, fails_path = "fails.csv",
                          quiet = FALSE) {
+  render <- match.arg(render)
   members <- list_members()
   if (!is.null(max_members)) members <- utils::head(members, max_members)
   scrape_pressers(members, from = from, to = to, fetch_bodies = fetch_bodies,
-                  page_limit = page_limit, log_fails = log_fails,
+                  page_limit = page_limit, render = render, log_fails = log_fails,
                   fails_path = fails_path, quiet = quiet)
 }
 
