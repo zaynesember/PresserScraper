@@ -7,3 +7,6 @@ fails.csv
 *.tar.gz
 ..Rcheck/
 docs/
+
+# Session scratch — not part of the package
+SESSION_PROGRESS.md

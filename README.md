@@ -88,6 +88,25 @@ options(pressR.throttle = 20)            # requests/minute (default 20)
 options(pressR.cache_dir = "~/.cache/pressR")  # enable on-disk HTTP cache
 ```
 
+## Archiving
+
+Scrapes return in-memory tibbles; to build historical coverage, append runs to
+a local, year-partitioned, de-duplicated store (xz-compressed RDS, keyed on
+`url` so re-scrapes refresh rather than duplicate):
+
+```r
+res <- scrape_house(from = "2026-01-01")
+archive_releases(res)                       # -> tools::R_user_dir("pressR","data")
+read_archive(from = "2026-01-01", to = Sys.Date())
+```
+
+Set `options(pressR.archive_dir = "~/pressR-archive")` to choose the location.
+Because the corpus grows (~33 MB/year compressed, body text included) it lives
+on disk, not in the package. Prebuilt snapshots are published as GitHub release
+assets; fetch them without scraping via `download_archive()` (and, for
+maintainers with write access, `publish_archive()`). Both need the suggested
+**piggyback** package.
+
 ## Development
 
 ```r
