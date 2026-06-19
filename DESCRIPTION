@@ -1,0 +1,34 @@
+Package: pressR
+Title: Scrape Press Releases from U.S. House Members' Websites
+Version: 0.1.0
+Authors@R:
+    person("Zayne", "Sember", , "zaynesember@gmail.com", role = c("aut", "cre"))
+Description: Collects press releases from United States House of
+    Representatives members' .house.gov websites over a date range. Detects
+    the content-management system behind each site (Drupal, ASP.NET,
+    WordPress, or a generic fallback) and routes to a dedicated extractor,
+    fetching pages statically by default and falling back to a headless
+    browser only where required.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0)
+Imports:
+    cli,
+    dplyr,
+    httr2,
+    purrr,
+    rvest,
+    stats,
+    tibble,
+    utils,
+    xml2
+Suggests:
+    chromote,
+    jsonlite,
+    piggyback,
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3

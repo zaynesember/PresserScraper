@@ -1,0 +1,742 @@
+
+
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta property="og:image" content="https://chrissmith.house.gov/images/seal.png" /><title>
+	News List | U.S. Representative
+</title><link media="all" rel="stylesheet" href="/css/all.css" /><link media="print" rel="stylesheet" href="/css/print.css" /><link rel="alternate" type="application/rss+xml" title="Chris Smith RSS Feed" href="/news/rss.aspx" /><link rel="stylesheet" rev="stylesheet" href="/styles/forms.css" type="text/css" /><link rel="stylesheet" rev="stylesheet" href="/css/forms.css" type="text/css" /><link rel="stylesheet" rev="stylesheet" href="/styles/media.css" type="text/css" />
+	<script type="text/javascript" src="/sysjs/jquery.oldest.min.js"></script>
+	<script type="text/javascript" src="/sysjs/cycle.js"></script>
+	<script type="text/javascript" src="/js/jquery.main.js"></script>
+    <script type="text/javascript" src="/sysjs/jquery.zipform.min.js"></script>
+
+  <script type="text/javascript">
+    function f(o)
+    {
+      o.value=o.value.replace(/([^0-9])/g,"");
+    }
+    var state = "NJ";
+    var district = "04";
+    
+    $(function(){
+      $('form.zipform').zipForm({
+        state: state,
+        district: district
+      });
+    });
+
+    function MM_findObj(n, d) { //v4.01
+      var p,i,x;  if(!d) d=document; if((p=n.indexOf("?"))>0&&parent.frames.length) {
+      d=parent.frames[n.substring(p+1)].document; n=n.substring(0,p);}
+      if(!(x=d[n])&&d.all) x=d.all[n]; for (i=0;!x&&i<d.forms.length;i++) x=d.forms[i][n];
+      for(i=0;!x&&d.layers&&i<d.layers.length;i++) x=MM_findObj(n,d.layers[i].document);
+      if(!x && d.getElementById) x=d.getElementById(n); return x;
+    }
+    function MM_validateForm() { //v4.0
+      var i,p,q,nm,test,num,min,max,errors='',args=MM_validateForm.arguments;
+      for (i=0; i<(args.length-2); i+=3) { test=args[i+2]; val=MM_findObj(args[i]);
+      if (val) { nm=args[i+1]; if ((val=val.value)!="") {
+        if (test.indexOf('isEmail')!=-1) { p=val.match(/^\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*$/gi);
+          if (p==null) errors+='- '+nm+' must be a valid e-mail address.\n';
+      } else if (test!='R') { num = parseFloat(val);
+      if (isNaN(val)) errors+='- '+nm+' must contain a number.\n';
+      if (test.indexOf('inRange') != -1) { p=test.indexOf(':');
+      min=test.substring(8,p); max=test.substring(p+1);
+      if (num<min || max<num) errors+='- '+nm+' must contain a number between '+min+' and '+max+'.\n';
+      } } } else if (test.charAt(0) == 'R') errors += '- '+nm+' is required.\n'; }
+      } if (errors) alert('The following error(s) occurred:\n'+errors);
+      document.MM_returnValue = (errors == '');
+    }
+  </script>
+	<script type="text/javascript">
+	$( document ).ready(function() {
+		$('.col2 a').removeAttr('href');
+	});
+	</script>
+	<!--[if IE]><script src="js/ie.js"></script><![endif]-->
+	<!--[if lt IE 9]><link media="all" rel="stylesheet" href="../Templates/Default/css/ie8.css" /><![endif]-->
+  
+        <!-- Meta tags for Google -->
+        <meta name="robots" content="NOODP" />
+        <meta name="googlebot" content="NOODP" />
+        <!-- RSS Feed -->
+        <link rel="alternate" type="application/rss+xml" href="/news/rss.aspx" />
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-CWT12BWHF8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-CWT12BWHF8', {
+    allow_google_signals: false,
+    cookie_flags: 'secure;',
+    user_properties: {
+      network: 'normal',
+    },
+  });
+  gtag('config', 'G-QWS5JLGHCT', {
+    allow_google_signals: false,
+    cookie_flags: 'secure;',
+    cookie_domain: 'chrissmith.house.gov',
+    user_properties: {
+      network: 'normal',
+    },
+  });
+</script>
+
+<script>
+// Add noopener noreferrer to all target="_blank" links
+(function() {
+    function fixBlankLinks() {
+        var links = document.querySelectorAll('a[target="_blank"]');
+        links.forEach(function(link) {
+            var rel = link.getAttribute('rel') || '';
+            var hasNoopener = rel.indexOf('noopener') !== -1;
+            var hasNoreferrer = rel.indexOf('noreferrer') !== -1;
+
+            if (!hasNoopener || !hasNoreferrer) {
+                var relValues = rel.split(' ').filter(function(v) { return v; });
+                if (!hasNoopener) relValues.push('noopener');
+                if (!hasNoreferrer) relValues.push('noreferrer');
+                link.setAttribute('rel', relValues.join(' '));
+            }
+        });
+    }
+
+    // Run immediately for server-rendered content
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fixBlankLinks);
+    } else {
+        fixBlankLinks();
+    }
+
+    // Also run after delay to catch third-party widgets (Twitter, Facebook, Instagram)
+    setTimeout(fixBlankLinks, 2000);
+})();
+</script>
+
+<script type="text/javascript">
+  (function () {
+    function setSandbox(/** @type {HTMLIframeElement} */ iframe) {
+      if (!iframe.getAttribute('src') || iframe.src.startsWith("https://video.teleforumonline.com")) {
+        return;
+      }
+      var standard = 'allow-forms allow-modals allow-presentation allow-storage-access-by-user-activation allow-same-origin';
+      var extra = ' allow-scripts allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-popups allow-top-navigation';
+      var isKnownRestrictableIframe = iframe.src && (
+        iframe.src.startsWith("https://www.instagram.com") ||
+        iframe.src.startsWith("https://www.facebook.com") ||
+        iframe.src.startsWith("https://platform.twitter.com/widgets")
+        );
+      var sandboxValue =  (isKnownRestrictableIframe) ? standard : (standard+extra);
+      iframe.setAttribute('sandbox', sandboxValue);
+    }
+    
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach(mutation => {
+        if (mutation.target.tagName === 'IFRAME'
+            && mutation.type === 'attributes' 
+            && (mutation.attributeName === 'sandbox' || mutation.attributeName === 'src')
+        ) {
+          setSandbox(mutation.target);
+        }
+        mutation.addedNodes.forEach(node => {
+          if (node.tagName === 'IFRAME') {
+            setSandbox(node);
+          }
+        });
+      });
+    });
+    document.addEventListener("DOMContentLoaded", function(){
+      document.querySelectorAll("iframe").forEach(function (iframe) {
+        setSandbox(iframe);
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+  })();
+</script>
+</head>
+<body id="ctl00_Survey" class="int">
+	<div id="wrapper">
+		<header id="header">
+      <div class="bg-stretch">
+        <img src="/images/bg-body.jpg" alt="image description" id="bg" />
+        <div class="bgcaptions" id="caption0">Spring Lake, NJ</div>
+        <div class="bgcaptions" id="caption1">Avon-By-The-Sea, NJ</div>
+        <div class="bgcaptions" id="caption2">Bay Head, NJ</div>
+        <div class="bgcaptions" id="caption3">Belmar Marina, NJ</div>
+        <div class="bgcaptions" id="caption4">Fisherman's Memorial - Point Pleasant, NJ</div>
+        <div class="bgcaptions" id="caption5">Manasquan Inlet, NJ</div>
+        <div class="bgcaptions" id="caption6">Monmouth Battlefield State Park, NJ</div>
+        <div class="bgcaptions" id="caption7">Lakewood, NJ</div>
+        <script type="text/javascript">
+          var bgImages = [
+            $('<img src="/images/bg-body.jpg" alt="Spring Lake, NJ" id="bg" />'), 
+            $('<img src="/images/bg-body2.jpg" alt="Avon-By-The-Sea, NJ" id="bg" />'), 
+            $('<img src="/images/bg-body3.jpg" alt="Bay Head, NJ" id="bg" />'), 
+            $('<img src="/images/bg-body4.jpg" alt="Belmar Marina, NJ" id="bg" />'), 
+            $('<img src="/images/bg-body5.jpg" alt="Fishermans Memorial - Point Pleasant, NJ" id="bg" />'), 
+            $('<img src="/images/bg-body6.jpg" alt="Manasquan Inlet, NJ" id="bg" />'), 
+            $('<img src="/images/bg-body7.jpg" alt="Monmouth Battlefield State Park, NJ" id="bg" />'), 
+            $('<img src="/images/Lakewood.jpg" alt="Lakewood, NJ" id="bg" />')
+          ];
+
+          var randomnumber = Math.floor(Math.random()*bgImages.length);
+
+          $('#bg').replaceWith(bgImages[randomnumber]);
+          $('#caption' + randomnumber).show();
+          
+        </script>
+      </div>
+      <div class="container">
+  			<h1 class="logo"><a href="/"><span class="title">U.S. Congressman</span> Chris Smith <span class="details">Representing New Jersey's 4th District</span></a></h1>
+  			<img class="img-chris" src="/images/nj-23.png" alt="Chris Smith Photo" height="262" width="173">
+        <img alt="" src="/images/print-header.jpg" class="print-only print-header" />
+  			<nav id="nav">
+  				<span class="holder"><a class="opener" href="#">Opener</a>Menu</span>
+  				<ul class="slide">
+            <li class="active"><a href="/">Home</a></li>
+<li><a href="/constituentservices">Constituent Services</a>
+<ul>
+    <li><a href="/ConstituentServices/casework/default.aspx">Help With A Federal Agency</a></li>
+    <li><a href="/ConstituentServices/visitingwashington.htm">Visit Washington, D.C.</a></li>
+    <li><a href="https://flagorder.house.gov/FlagOrder.aspx?ssdd=NJ04 ">Flag Requests</a></li>
+    <li><a href="/constituentservices/internships.htm">Internships</a></li>
+    <li><a href="/constituentservices/serviceacademynominations.htm">Service Academy Nominations</a></li>
+    <li><a href="/constituentservices/congressionalartcompetition.htm">Congressional Art Competition</a></li>
+    <li><a href="https://chrissmith.house.gov/constituentservices/community-projects.htm">Community Projects</a></li>
+</ul>
+</li>
+<li><a href="/lawsandresolutions">Legislation</a>
+<ul>
+    <li><a href="https://www.govtrack.us/congress/bills/browse?sponsor=400380#enacted_ex=on">Laws Authored by Chris</a></li>
+    <!--<li><a href="/lawsandresolutions">Laws Authored by Chris</a></li>-->
+    <li><a href="/lawsandresolutions/sponsoredbills.htm">Introduced Sponsored Legislation</a></li>
+    <li><a href="/lawsandresolutions/cosponsoredbills.htm">Proposed Cosponsored Legislation</a></li>
+</ul>
+</li>
+<li><a href="/biography">About Chris</a>
+<ul>
+    <li><a href="/biography">Biography</a></li>
+    <li><a href="/biography/committee-assignments.htm">Committees</a></li>
+    <li><a href="/biography/congcaucuses.htm">Caucus Membership</a></li>
+</ul>
+</li>
+<li class="contact"><a href="/contact">Contact</a>
+<ul>
+    <li><a href="/contact/zipauth.htm">Email Chris</a></li>
+    <li><a href="/contact">Office Contact Information</a></li>
+</ul>
+</li>
+<li class="news-room"><a href="/news">Newsroom</a></li>
+<li class="district"><a href="/district">4th District</a></li>
+<li class="flag-requests"><a href="/WebForms/FlagRequest/">Flag Requests</a></li>
+<li class="visit-washington"><a href="/constituentservices/visitingwashington.htm">Visit Washington, DC</a></li>
+  				</ul>
+  			</nav>
+        <ul id="sizer">
+          <span>Font Size:</span>&nbsp;
+          <li><a id="decrease" href="#" aria-label="Decrease Font Size"><span class="arrow-down"></span></a></li>
+          <li><a id="increase" href="#" aria-label="Increase Font Size"><span class="arrow-up"></span></a></li>
+        </ul>
+      </div>
+		</header>
+		<main id="main">
+			<div id="content">
+				<div class="cycle-gallery">
+					
+        <div class="cookies">
+          <a href="/" aria-label="Home">Home</a> &gt;
+          <a href="/news" id="ctl00_SectionLink">news</a>
+        </div>
+        <h1 class="h2 page-title"><span id="ctl00_PageLink">News List</span></h1>
+        <div class="buffer">
+        <table border="0" cellspacing="0" cellpadding="0" width="100%">
+          <tr>
+            <td id="ctl00_ContentCell" class="middlecopy">
+  
+<link rel="stylesheet" type="text/css" href="/styles/news.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/styles/qtip.css" media="screen" />
+<!--[if lt IE 9]>
+  <link rel="stylesheet" type="text/css" href="/styles/oldie.css" />
+<![endif]-->
+<script type="text/javascript" src="/sysjs/qtip.js"></script>
+<script type="text/javascript">
+  $(document).ready(function() {
+    $('a.preview[rel]').each(function () {
+      var previewLink = $(this);
+      previewLink.qtip({
+        content: {
+          text: function (event, api) {
+            $.ajax({ url: previewLink.attr('rel') })
+              .done(function (html) {
+                api.set('content.text', html);
+              })
+              .fail(function (xhr, status, error) {
+                api.set('content.text', status + ':' + error);
+              });
+            return '<img class="throbber" src="/img/load.gif" alt="Loading..." />';
+          }
+        },
+        position: {
+          my: 'top left',
+          at: 'bottom center',
+          target: previewLink
+        },
+        show: {
+          event: 'click',
+          solo: true // Only show one tooltip at a time
+        },
+        hide: {
+          event: 'unfocus'
+        },
+        style: {
+          classes: 'qtip-light qtip-shadow qtip-rounded',
+          tip: {
+            corner: true
+          },
+          width: 450
+        }
+      });
+    });
+  });
+</script>
+  <div class="topnewsbar">
+  <div class="newssearchtext">Browse Documents by Date:</div>
+    <form class="change-year" action="">
+      
+      <label for="year" class="hidden">Year</label>
+      <select name="Year" id="year" class="nicedrop">
+        
+          <option value="2026"  >2026</option>
+        
+          <option value="2025"  >2025</option>
+        
+          <option value="2024"  >2024</option>
+        
+          <option value="2023"  >2023</option>
+        
+          <option value="2022"  >2022</option>
+        
+          <option value="2021"  >2021</option>
+        
+          <option value="2020"  >2020</option>
+        
+          <option value="2019"  >2019</option>
+        
+          <option value="2018"  >2018</option>
+        
+          <option value="2017"  >2017</option>
+        
+          <option value="2016"  >2016</option>
+        
+          <option value="2015"  >2015</option>
+        
+          <option value="2014"  >2014</option>
+        
+          <option value="2013"  >2013</option>
+        
+          <option value="2012"  >2012</option>
+        
+          <option value="2011"  >2011</option>
+        
+          <option value="2010"  >2010</option>
+        
+          <option value="2009"  >2009</option>
+        
+          <option value="2008"  >2008</option>
+        
+          <option value="2007"  >2007</option>
+        
+          <option value="2006"  >2006</option>
+        
+          <option value="2005"  >2005</option>
+        
+          <option value="2004"  >2004</option>
+        
+          <option value="2003"  >2003</option>
+        
+          <option value="2002"  >2002</option>
+        
+          <option value="2000"  >2000</option>
+        
+          <option value="1999"  >1999</option>
+        
+          <option value="1998"  >1998</option>
+        
+      </select>
+      <label for="month" class="hidden">Month</label>
+      <select name="Month" id="month" class="nicedrop">
+        
+          <option value="1"  >January</option>
+        
+          <option value="2"  >February</option>
+        
+          <option value="3"  >March</option>
+        
+          <option value="4"  >April</option>
+        
+          <option value="5"  >May</option>
+        
+          <option value="6"  >June</option>
+        
+          <option value="7"  >July</option>
+        
+          <option value="8"  >August</option>
+        
+          <option value="9"  >September</option>
+        
+          <option value="10"  >October</option>
+        
+          <option value="11"  >November</option>
+        
+          <option value="12"  >December</option>
+        
+      </select>
+      <input type="submit" class="nicedropbtn" value="Go" />
+    </form>
+    <form class="change-cat issue-cat" action="">
+      <label for="issue" class="hidden">Issue</label>
+      <select id="issue" name="IssueID" class="nicedrop">
+        <option>-- Select an Issue --</option>
+          
+              <option value="3744" >Smith Works to Protect Environment for Future Generations</option>
+            
+              <option value="3743" >Smith Works to Protect Human Rights for All</option>
+            
+              <option value="2309" >Smith: Veterans’ Needs Should Be First in the Queue for Federal Funds</option>
+            
+      </select>
+    <input type="submit" class="nicedropbtn" value="Go" />
+  </form>
+</div>
+<div class="middlecopy">
+  
+      <ul class="UnorderedNewsList">
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415715" class="middleheadline">
+          <span class ="kicker">RealClearPolitics article featuring Smith's India Op-Ed</span>'Christian Ministries in India Face Threat of Greater Repression'
+        </a><br />
+        Posted in In the Press... on June 17, 2026 |
+        <a rel="preview.aspx?DocumentID=415715" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+            By David K. Trimble Published June 17, 2026 Christian ministries serving in India have endured discrimination and other forms of maltreatment for a long time. They may soon face even greater repression, particularly those supported by the faithfulness of donors outside of India. It is long overdue for members of India’s parliament to take legislative action that protects, rather than restricts, the freedom of Christians living, serving, and teaching in their midst. According to reporting in Chri...
+            <a href="/news/documentsingle.aspx?DocumentID=415715">Read more</a>
+          </p>
+           
+              <img src='/UploadedPhotos/LowResolution/853891a5-6bae-40dd-971c-a35c0e8783de.png' alt="" />
+           
+      </li>
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415713" class="middleheadline">
+          <span class ="kicker">The Catholic Herald Op-Ed by Rep. Smith</span>'Beijing's new ethnic unity law threatens faith, culture and freedom'
+        </a><br />
+        Posted in Opinion Pieces on June 15, 2026 |
+        <a rel="preview.aspx?DocumentID=415713" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+            By Rep. Chris Smith &amp; Miriam Lexmann MEP Published June 15, 2026 at 9:00 PM Beijing calls its new law “ethnic unity.” The phrase is meant to reassure the world. It should alarm it. Every country needs social peace. Every nation needs a shared civic identity. But the Chinese Communist Party is not asking Tibetans, Uyghurs, Mongols, Hui Muslims, Manchus, Cantonese speakers and others to participate equally in a common future. It is demanding that their languages, faiths, memories and children be r...
+            <a href="/news/documentsingle.aspx?DocumentID=415713">Read more</a>
+          </p>
+           
+              <img src='/UploadedPhotos/LowResolution/6541198c-fc75-4d79-8187-503f152c54db.png' alt="" />
+           
+      </li>
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415708" class="middleheadline">
+          Smith, Brecheen, Lankford lead letter to EPA Admin. Zeldin urging addition of chemical abortion drug mifepristone to list of contaminants in public water systems
+        </a><br />
+        Posted in Press Release on June 11, 2026 |
+        <a rel="preview.aspx?DocumentID=415708" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+             Rep. Chris Smith (R-NJ), Rep. Josh Brecheen (R-OK), and Sen. James Lankford (R-OK) led 16 members of Congress in sending a comment letter to Environmental Protection Agency (EPA) Administrator Lee Zeldin, urging the addition of mifepristone, a chemical abortion drug, to the agency’s sixth Contaminant Candidate List (CCL 6), which identifies potential or known contaminants in public water systems that are not currently subject to regulations under U.S. law. In the bicameral letter, the Republica...
+            <a href="/news/documentsingle.aspx?DocumentID=415708">Read more</a>
+          </p>
+           
+      </li>
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415709" class="middleheadline">
+          <span class ="kicker">DOJ, DHS, and HHS have located 146,000 unaccompanied minors</span>Smith thanks Trump Administration for commitment to protecting unaccompanied migrant children and combating human trafficking
+        </a><br />
+        Posted in Press Release on June 11, 2026 |
+        <a rel="preview.aspx?DocumentID=415709" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+             Rep. Chris Smith (R-NJ), the author of five major anti-human trafficking laws, praised Trump Administration officials—including Acting U.S. Attorney General (AG) Todd Blanche and U.S. Secretary of the Department of Homeland Security (DHS) Markwayne Mullin—who announced today that the Administration has indicted three fraudulent “sponsors” and located over 146,000 unaccompanied migrant children, the vast majority of whom were trafficked through the southern border due to the Biden-Harris Adminis...
+            <a href="/news/documentsingle.aspx?DocumentID=415709">Read more</a>
+          </p>
+           
+      </li>
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415711" class="middleheadline">
+          <span class ="kicker">The Washington Times article on Smith-led letter to EPA Admin. Zeldin</span>'Republicans ask EPA to consider abortion drug as contaminant in public water systems'
+        </a><br />
+        Posted in In the Press... on June 11, 2026 |
+        <a rel="preview.aspx?DocumentID=415711" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+            By Kerry Picket Published Thursday, June 11, 2026 A group of Republican lawmakers from the House and Senate are asking Environmental Protection Agency Administrator Lee Zeldin to add a chemical abortion drug to the list of contaminants in public water systems. Rep. Chris Smith of New Jersey, and Rep. Josh Brecheen and Sen. James Lankford of Oklahoma led 16 GOP lawmakers in sending a letter to Mr. Zeldin urging the addition of mifepristone to the agency’s sixth Contaminant Candidate List (CCL 6),...
+            <a href="/news/documentsingle.aspx?DocumentID=415711">Read more</a>
+          </p>
+           
+              <img src='/UploadedPhotos/LowResolution/3428a029-1a9e-49d1-8fc3-e877e7307e89.png' alt="" />
+           
+      </li>
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415696" class="middleheadline">
+          <span class ="kicker">HR 1744, the United States Commission on International Religious Freedom (USCIRF) Reauthorization Act of 2026</span>House overwhelmingly passes Smith bill to reauthorize and strengthen U.S. international religious freedom board
+        </a><br />
+        Posted in Press Release on June 9, 2026 |
+        <a rel="preview.aspx?DocumentID=415696" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+             The U.S. House of Representatives overwhelmingly passed the United States Commission on International Religious Freedom (USCIRF) Reauthorization Act of 2026 (HR 1744), legislation authored by Rep. Chris Smith (R-NJ) to extend and authorize annual appropriations for USCIRF through fiscal year 2028. During the floor debate on HR 1744, Smith reiterated the necessity of continued federal funding for the Commission: “USCIRF’s high-quality reporting and high-profile commissioners influence the State ...
+            <a href="/news/documentsingle.aspx?DocumentID=415696">Read more</a>
+          </p>
+           
+      </li>
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415699" class="middleheadline">
+          <span class ="kicker">“Playing politics with essential national security functions puts American lives at risk”</span>Rep. Smith votes to fund critical programs at the Department of Homeland Security
+        </a><br />
+        Posted in Statements on June 9, 2026 |
+        <a rel="preview.aspx?DocumentID=415699" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+             Rep. Chris Smith (R-NJ) issued the following statement after voting to send the Secure America Act (S. 2) to President Trump’s desk, which will provide funding for U.S. Immigration and Customs Enforcement (ICE) and Customs and Border Patrol (CBP) through Fiscal Year 2029: “Since the beginning of this Congress, my fellow House Republicans and I have been working tirelessly to remedy the unprecedented crisis at our Southern border. “The Biden-Harris Administration’s weak, feckless border enforcem...
+            <a href="/news/documentsingle.aspx?DocumentID=415699">Read more</a>
+          </p>
+           
+      </li>
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415700" class="middleheadline">
+          <span class ="kicker">Securing protections for America’s workers</span>Rep. Smith votes to advance the Faster Labor Contracts Act
+        </a><br />
+        Posted in Statements on June 9, 2026 |
+        <a rel="preview.aspx?DocumentID=415700" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+             Rep. Chris Smith (R-NJ) issued the following statement after voting to advance the Faster Labor Contracts Act (HR 5408) in the U.S. House of Representatives. Smith was joined by fellow New Jersey Republican, Rep. Jeff Van Drew (R-NJ-02), in supporting final passage of the bill: “Today, I voted in support of the Faster Labor Contracts Act (HR 5408) to enable America’s working men and women to exercise their fundamental right to establish collective bargaining units and negotiate for a better wor...
+            <a href="/news/documentsingle.aspx?DocumentID=415700">Read more</a>
+          </p>
+           
+      </li>
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415690" class="middleheadline">
+          <span class ="kicker">Fox News Op-Ed by Rep. Smith</span>'Tiananmen Square tank man taught us to stand up against the worst of China'
+        </a><br />
+        Posted in Opinion Pieces on June 8, 2026 |
+        <a rel="preview.aspx?DocumentID=415690" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+            By Rep. Chris Smith Published June 8, 2026 at 9:00 AM EDT This past June 4, we marked the 37th somber anniversary of the Tiananmen Square Massacre, where millions of Chinese citizens peacefully and earnestly asked for political reform and democratic openness. Instead, their hope was met with tanks. On that awful day, the Chinese Communist Party unleashed the People’s Liberation Army on these peaceful demonstrators. Mothers lost sons. Fathers lost daughters. And China lost an idealistic generatio...
+            <a href="/news/documentsingle.aspx?DocumentID=415690">Read more</a>
+          </p>
+           
+              <img src='/UploadedPhotos/LowResolution/8e02b838-e7fa-417a-b442-edc5aa1bce4f.png' alt="" />
+           
+      </li>
+    
+      <li>
+        <a href="documentsingle.aspx?DocumentID=415695" class="middleheadline">
+          <span class ="kicker">Holding Nicaragua’s Murillo-Ortega dictatorship accountable</span>Rep. Smith applauds Sec. Rubio, President Trump for imposing visa restrictions on 100+ Murillo-Ortega dictatorship officials
+        </a><br />
+        Posted in Statements on June 8, 2026 |
+        <a rel="preview.aspx?DocumentID=415695" class="preview">Preview <span class="previewicon">rr</span></a><br />
+
+        
+        <div class="image-caption">
+          <p>
+             Rep. Chris Smith (R-NJ), senior member of the House Foreign Affairs Committee and author of the Restoring Sovereignty and Human Rights in Nicaragua Act of 2026 (HR 7055), issued the following statement in response to the State Department’s announcement today that the U.S. has imposed additional visa restrictions on more than one hundred Murillo-Ortega dictatorship officials and their family members: “The brutal Murillo-Ortega regime continues to eviscerate the basic rights and fundamental freed...
+            <a href="/news/documentsingle.aspx?DocumentID=415695">Read more</a>
+          </p>
+           
+      </li>
+    
+      </ul>
+    
+  
+  <div id="NewsListNavLinks2" align="right">
+    <a id="ctl00_ctl14_LinkPrev2" class="PagerButtons">Previous</a>&nbsp;
+    <a id="ctl00_ctl14_LinkNext2" class="PagerButtons" href="https://chrissmith.house.gov/news/documentquery.aspx?Page=2">Next</a>
+  </div>
+</div>
+</td>
+
+          </tr>
+        </table>
+        </div>
+				</div>
+			</div>
+			<aside id="sidebar">
+        <section class="widget">
+          <nav class="side-nav">
+            <ul>
+              <li class="noborder">
+                <br/>
+                <a class="sublink" target="_blank" href="https://www.govtrack.us/congress/bills/browse?sponsor=400380#enacted_ex=on" rel="noopener noreferrer">Laws Authored by Chris</span></a>
+              </li>
+              <!--<li class="noborder">
+                <a class="sublink" target="_blank" href="https://www.govtrack.us/congress/bills/browse?sponsor=400380#enacted_ex=on" rel="noopener noreferrer">Advanced Search</a></li>-->
+              <li class="noborder">
+                <a class="sublink" target="_blank" href="https://www.govtrack.us/congress/bills/browse?sponsor=400380#current_status[]=28&enacted_ex=on&cosponsors=400380&bill_type[]=3,7&sponsor=__ALL__" rel="noopener noreferrer">Laws Co-Sponsored by Chris</a></li>
+              <li class="noborder">
+                <a class="sublink" target="_blank" href="https://www.congress.gov/member/christopher-smith/S000522?q=%7b%22congress%22%3a%22all%22%2c%22sponsorship%22%3a%22sponsored%22%2c%22bill-status%22%3a%22passed-one%22%7d" rel="noopener noreferrer">Bills passed the House of Representatives</a></li>
+              <li class="noborder">
+                <a class="sublink" target="_blank" href="https://www.congress.gov/member/christopher-smith/S000522?q=%7B%22sponsorship%22%3A%22sponsored%22%2C%22congress%22%3A%22all%22%2C%22status%22%3A%5B%22House+amendment+agreed+to%22%5D%7D" rel="noopener noreferrer">Smith Amendments offered, passed in the House</a></li>
+              <li style="margin-bottom: 10px" class="noborder">
+                <a class="sublink" target="_blank" href="/lawsandresolutions" rel="noopener noreferrer">Bills that became Law and Resolutions Passed</a></li>
+            </ul>
+          </nav>     
+          <aside class="info red-alert">
+            <br />
+            <span class="heading">District <br />Offices to <br /> Serve You:</span>
+            <ul class="corona-sidebar">
+              <li>
+<strong>Constituent Service Center</strong><br />
+1005 Hooper Avenue<br />
+Toms River, NJ 08753<br />
+Tel.: (732) 504-0567</li>
+             
+              </ul>
+              <span>******</span>
+              <ul class="corona-sidebar">
+                <li>
+<strong>Washington, D.C. Office</strong><br />
+2373 Rayburn HOB<br />
+Washington, D.C. 20515<br />
+Tel.: (202) 225-3765<br />
+<!--Fax: (202) 225-7768-->
+</li>
+              </ul>
+            </aside>
+          
+          
+          <nav class="side-nav">
+            <ul>
+             
+              <li><a class="consituent-services" href="/constituentservices">Constituent Services</a></li>
+<li><a class="news-room" href="/news">Newsroom</a></li>
+<li><a class="district" href="/district">4th District</a></li>
+<li><a class="contact-chris" href="/contact">Contact Chris</a></li>
+<li><a class="flag-requests" href="https://flagorder.house.gov/FlagOrder.aspx?ssdd=NJ04">Flag Requests</a></li>
+<li><a class="visit-washington" href="/constituentservices/visitingwashington.htm">Visit Washington, DC</a></li>
+            </ul>
+          </nav>
+          <ul class="social-networks">
+            <!-- <li><a href="https://www.facebook.com/pages/Congressman-Chris-Smith/371621772908416">facebook</a>
+</li> -->
+<li><a class="youtube" href="https://www.youtube.com/@USRepChrisSmith/videos">youtube</a>
+</li>
+<li><a class="instagram" href="https://www.instagram.com/repchrissmith/?hl=en">instagram</a></li>
+          </ul>
+        </section>
+        <section class="widget">
+          <form class="search-form" action="https://congress.gov/search" method="get" target="_blank">
+            <fieldset>
+              <legend class="hidden">Search Legislation Options</legend>
+              <div class="row">
+                <label class="label" for="search">Search Legislation</label>
+                <input name="q" type="text" id="search"/>
+              </div>
+              <div class="row">
+                <ul class="radio-list">
+                  <li>
+                    <input type="radio" checked="checked" name="search-source" value="current-legislation" class="radio" id="topic">
+                    <label for="topic">current legislation</label>
+                  </li> 
+                  <li>
+                    <input type="radio" name="search-source" value="legislation" class="radio" id="bill">
+                    <label for="bill">all legislation</label>
+                  </li>
+                </ul>
+              </div>
+              <input type="submit" value="submit">
+            </fieldset>
+          </form>
+        </section>
+        
+      </aside>
+		</main>
+		<footer id="footer">
+			<div class="footer-top">
+        <section class="column">
+<table style="width: 823px; height: 66px;">
+    <tbody>
+        <tr>
+            <td style="text-align: center;">
+            <strong>Washington DC Office</strong>
+            <address style="text-align: center;">
+            <p>2373 Rayburn House Office Building<br />
+            Washington, D.C. 20515<br />
+            <br />
+            Phone: (202) 225-3765</p>
+            </address>
+            &nbsp;</td>
+            <td style="text-align: center;"><strong>Constituent Service Center </strong>
+            <address>
+            <p style="text-align: center;">1005 Hooper Avenue<br />
+            Toms River, NJ&nbsp; 08753<br />
+            <br />
+            Phone: (732) 504-0567</p>
+            <p style="text-align: center;">*Please call for an appointment.</p>
+            </address>
+            </td>
+        </tr>
+    </tbody>
+</table>
+<br />
+<address class="slide">
+</address>
+</section>
+			</div>
+			<div class="footer-bottom">
+				<nav class="footer-nav">
+					<ul>
+						<li><a href="/">Home</a></li>
+						<li><a href="/contact">CONTACT</a></li>
+						<li><a href="/homepage-2014/00-nav.htm">Site Map</a></li>
+					</ul>
+				</nav>
+				<ul class="social-networks">
+          <!-- <li><a href="https://www.facebook.com/pages/Congressman-Chris-Smith/371621772908416">facebook</a>
+</li> -->
+<li><a class="youtube" href="https://www.youtube.com/@USRepChrisSmith/videos">youtube</a>
+</li>
+<li><a class="instagram" href="https://www.instagram.com/repchrissmith/?hl=en">instagram</a></li>
+				</ul>
+			</div>
+		</footer>
+	</div>
+</body>
+</html>
+

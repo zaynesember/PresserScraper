@@ -1,0 +1,11 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^legacy$
+^\.git$
+^\.gitignore$
+^\.RData$
+^\.Rhistory$
+^.*\.nb\.html$
+^fails\.csv$
+^LICENSE\.md$
+^SESSION_PROGRESS\.md$
