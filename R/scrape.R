@@ -17,6 +17,10 @@
 #'   avoids spawning a browser on the unsupported tail; the default `"auto"`
 #'   only renders sites that yield nothing statically (and only if
 #'   \pkg{chromote} is installed).
+#' @param retry_failed If `TRUE` (default), members that fail with an `"error"`
+#'   (e.g. a listing that couldn't be located) are retried once at the end of
+#'   the run, since such failures are often transient timeouts under load.
+#'   `"empty"` results (listing found, nothing in range) are not retried.
 #' @param log_fails If `TRUE`, write the failures table to `fails_path`.
 #' @param fails_path Path for the failures CSV when `log_fails = TRUE`.
 #' @param quiet Suppress per-member progress messages.
@@ -29,6 +33,7 @@
 scrape_pressers <- function(members, from, to = Sys.Date(),
                             fetch_bodies = TRUE, page_limit = 100,
                             render = c("auto", "never", "always"),
+                            retry_failed = TRUE,
                             log_fails = FALSE, fails_path = "fails.csv",
                             quiet = FALSE) {
   render <- match.arg(render)
@@ -40,38 +45,52 @@ scrape_pressers <- function(members, from, to = Sys.Date(),
   n <- nrow(meta)
   if (n == 0) cli::cli_abort("No members to scrape.")
 
-  results <- vector("list", n)
-  fails <- list()
-
-  for (i in seq_len(n)) {
-    url <- meta$url[i]
-    if (!quiet) cli::cli_alert_info("[{i}/{n}] {url}")
-
+  # Scrape one member (by row index), returning the metadata-attached releases
+  # tibble on success, or a list(stage, message) describing the failure.
+  scrape_one <- function(i) {
     res <- tryCatch(
-      scrape_member(url, from = from, to = to, page_limit = page_limit,
+      scrape_member(meta$url[i], from = from, to = to, page_limit = page_limit,
                     fetch_bodies = fetch_bodies, render = render, quiet = TRUE),
       error = function(e) e
     )
+    if (inherits(res, "error")) return(list(stage = "error", message = conditionMessage(res)))
+    if (nrow(res) == 0) return(list(stage = "empty", message = "no releases in date range"))
+    meta_cols <- setdiff(names(meta), c("url", names(res)))
+    for (col in meta_cols) res[[col]] <- meta[[col]][i]
+    res
+  }
 
-    if (inherits(res, "error")) {
-      fails[[length(fails) + 1]] <- tibble::tibble(
-        url = url, stage = "error", message = conditionMessage(res)
-      )
-    } else if (nrow(res) == 0) {
-      fails[[length(fails) + 1]] <- tibble::tibble(
-        url = url, stage = "empty", message = "no releases in date range"
-      )
-    } else {
-      # Attach this member's metadata (release `url`/`cms` take precedence).
-      meta_cols <- setdiff(names(meta), c("url", names(res)))
-      for (col in meta_cols) res[[col]] <- meta[[col]][i]
-      results[[i]] <- res
+  results <- vector("list", n)
+  stage <- rep(NA_character_, n)
+  msg <- rep(NA_character_, n)
+
+  for (i in seq_len(n)) {
+    if (!quiet) cli::cli_alert_info("[{i}/{n}] {meta$url[i]}")
+    r <- scrape_one(i)
+    if (is.data.frame(r)) results[[i]] <- r else { stage[i] <- r$stage; msg[i] <- r$message }
+  }
+
+  # Retry "error" failures once: these are often transient (a timeout during
+  # listing discovery under load), not genuine. "empty" results are not retried
+  # -- the listing was found, there are simply no releases in the window.
+  retry_idx <- if (retry_failed) which(stage == "error") else integer(0)
+  if (length(retry_idx) > 0) {
+    if (!quiet) cli::cli_alert_info("Retrying {length(retry_idx)} failed member(s)...")
+    for (i in retry_idx) {
+      r <- scrape_one(i)
+      if (is.data.frame(r)) {
+        results[[i]] <- r; stage[i] <- NA_character_; msg[i] <- NA_character_
+      } else {
+        stage[i] <- r$stage; msg[i] <- r$message
+      }
     }
   }
 
   out <- dplyr::bind_rows(purrr::compact(results))
-  failures <- if (length(fails)) dplyr::bind_rows(fails) else
-    tibble::tibble(url = character(0), stage = character(0), message = character(0))
+  fail_idx <- which(!is.na(stage))
+  failures <- tibble::tibble(
+    url = meta$url[fail_idx], stage = stage[fail_idx], message = msg[fail_idx]
+  )
 
   if (nrow(out) > 0) out <- order_columns(out)
 
@@ -103,14 +122,15 @@ scrape_pressers <- function(members, from, to = Sys.Date(),
 scrape_house <- function(from, to = Sys.Date(), max_members = NULL,
                          fetch_bodies = TRUE, page_limit = 100,
                          render = c("auto", "never", "always"),
+                         retry_failed = TRUE,
                          log_fails = FALSE, fails_path = "fails.csv",
                          quiet = FALSE) {
   render <- match.arg(render)
   members <- list_members()
   if (!is.null(max_members)) members <- utils::head(members, max_members)
   scrape_pressers(members, from = from, to = to, fetch_bodies = fetch_bodies,
-                  page_limit = page_limit, render = render, log_fails = log_fails,
-                  fails_path = fails_path, quiet = quiet)
+                  page_limit = page_limit, render = render, retry_failed = retry_failed,
+                  log_fails = log_fails, fails_path = fails_path, quiet = quiet)
 }
 
 #' Scrape press releases for the whole U.S. Senate
@@ -127,14 +147,15 @@ scrape_house <- function(from, to = Sys.Date(), max_members = NULL,
 scrape_senate <- function(from, to = Sys.Date(), max_members = NULL,
                           fetch_bodies = TRUE, page_limit = 100,
                           render = c("auto", "never", "always"),
+                          retry_failed = TRUE,
                           log_fails = FALSE, fails_path = "fails.csv",
                           quiet = FALSE) {
   render <- match.arg(render)
   members <- list_senators()
   if (!is.null(max_members)) members <- utils::head(members, max_members)
   scrape_pressers(members, from = from, to = to, fetch_bodies = fetch_bodies,
-                  page_limit = page_limit, render = render, log_fails = log_fails,
-                  fails_path = fails_path, quiet = quiet)
+                  page_limit = page_limit, render = render, retry_failed = retry_failed,
+                  log_fails = log_fails, fails_path = fails_path, quiet = quiet)
 }
 
 # Coerce the `members` argument into a metadata tibble with a `url` column.

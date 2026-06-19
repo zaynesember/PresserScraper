@@ -11,6 +11,7 @@ scrape_senate(
   fetch_bodies = TRUE,
   page_limit = 100,
   render = c("auto", "never", "always"),
+  retry_failed = TRUE,
   log_fails = FALSE,
   fails_path = "fails.csv",
   quiet = FALSE
@@ -31,6 +32,11 @@ sample); \code{NULL} scrapes everyone.}
 avoids spawning a browser on the unsupported tail; the default \code{"auto"}
 only renders sites that yield nothing statically (and only if
 \pkg{chromote} is installed).}
+
+\item{retry_failed}{If \code{TRUE} (default), members that fail with an \code{"error"}
+(e.g. a listing that couldn't be located) are retried once at the end of
+the run, since such failures are often transient timeouts under load.
+\code{"empty"} results (listing found, nothing in range) are not retried.}
 
 \item{log_fails}{If \code{TRUE}, write the failures table to \code{fails_path}.}
 
