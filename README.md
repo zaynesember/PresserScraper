@@ -6,23 +6,24 @@ Automating the collection of U.S. Congress members' press releases.
 (`*.senate.gov`) members' websites over a date range and returns a tidy data
 frame. Instead of guessing among dozens of CSS/XPath selectors per site, it
 **detects the content-management system** behind each site and routes to a
-dedicated extractor. House coverage is ~99%; Senate support is newer (the same
-extractors already handle ~half the chamber, with vendor-specific tail work in
-progress).
+dedicated extractor. Coverage is ~99% of the House and ~97% of the Senate.
 
 ## Why CMS detection
 
-A survey of the chamber shows House sites cluster into a few vendor families:
+Member sites cluster into a few vendor families. The House skews to the
+official Drupal template; the Senate skews to WordPress (often with a custom
+press-release post type). Approximate House shares:
 
 | CMS | Share | How it's scraped |
 |-----|------:|------------------|
 | **Drupal** (official House template) | ~54% | `/media/press-releases` listing, `?page=N` pagination |
 | **ASP.NET** ("DocumentID") | ~20% | `documentquery.aspx` listing, `documentsingle.aspx` items |
-| **WordPress** | ~12% | `wp-json` REST API (`congress_press_release` category) |
-| **press-releases vendor** | small | `/press-releases` listing with either `?ID=<GUID>` (year-less dates inferred) or `/YYYY/M/slug` item links; pager param auto-probed |
-| **Other** | ~14% | generic heuristic extractor (heading-link titles + nearest date, incl. `/YYYY/M/slug` fallback) |
+| **WordPress** | ~12% (most of the Senate) | `wp-json` REST API — the `congress_press_release` category, a press-release custom post type, or an Elementor HTML fallback when REST is blocked |
+| **press-releases vendor** | small | `/press-releases` (or `/media-center`) listing with `?ID=<GUID>` (year-less dates inferred) or `/YYYY/M/slug` item links; pager param auto-probed |
+| **headless WordPress** (Next.js SPA) | small | public WPGraphQL endpoint (`/graphql`); releases at `/posts/<slug>` |
+| **Other** | ~14% | generic heuristic extractor (heading-link or long-text titles + nearest date, incl. `/YYYY/M/slug` fallback) |
 
-Four vendor extractors plus one generic fallback cover the whole chamber.
+Five vendor extractors plus one generic fallback cover both chambers.
 Pages are fetched statically by default; a headless-browser fallback
 ([`render_html()`], via the suggested **chromote** package) is available for the
 rare JS-rendered site.
@@ -41,10 +42,10 @@ library(pressR)
 
 # Current members and their sites
 members <- list_members()
-#> # A tibble: 437 × 6
-#>   name         state   district party committee           url
-#>   <chr>        <chr>   <chr>    <chr> <chr>               <chr>
-#> 1 Moore, Barry Alabama 1st      R     Agriculture;Judici… https://barrymoore.house.gov
+#> # A tibble: 437 × 7
+#>   name         state   district party committee           url                          chamber
+#>   <chr>        <chr>   <chr>    <chr> <chr>               <chr>                        <chr>
+#> 1 Moore, Barry Alabama 1st      R     Agriculture;Judici… https://barrymoore.house.gov house
 #> ...
 
 # One member
