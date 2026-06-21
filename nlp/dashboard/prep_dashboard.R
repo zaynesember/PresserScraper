@@ -89,6 +89,13 @@ fam_top <- q("
 members <- q("SELECT DISTINCT name, party, chamber, state FROM releases WHERE name IS NOT NULL ORDER BY name")
 years   <- q("SELECT DISTINCT year FROM releases WHERE year IS NOT NULL ORDER BY year")$year
 
+# ---- partisan language: Monroe weighted log-odds (only if present) ----
+partisan_terms <- partisan_scopes <- NULL
+if (has_table("partisan_terms")) {
+  partisan_terms  <- q("SELECT * FROM partisan_terms")
+  partisan_scopes <- q("SELECT * FROM partisan_scopes")
+}
+
 dbDisconnect(con, shutdown = TRUE)
 
 dash <- list(
@@ -99,6 +106,7 @@ dash <- list(
   fam_top = fam_top, members = members, years = years,
   sentiment_trends = sentiment_trends, sentiment_by_issue = sentiment_by_issue,
   sentiment_sources = sentiment_sources,
+  partisan_terms = partisan_terms, partisan_scopes = partisan_scopes,
   built_at = as.character(Sys.time())
 )
 dir.create(file.path(NLP, "dashboard"), showWarnings = FALSE)
@@ -114,3 +122,6 @@ cat(sprintf("  sources: %s | sentiment: %s\n",
   paste(sources$source, collapse=", "),
   if (is.null(sentiment_trends)) "ABSENT (run sentiment + persist first)" else
     sprintf("%d trend rows, %d issue rows", nrow(sentiment_trends), nrow(sentiment_by_issue))))
+cat(sprintf("  partisan: %s\n",
+  if (is.null(partisan_terms)) "ABSENT (run nlp/run_partisan.R first)" else
+    sprintf("%d term rows across %d scopes", nrow(partisan_terms), nrow(partisan_scopes))))

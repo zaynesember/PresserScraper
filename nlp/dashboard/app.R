@@ -59,6 +59,9 @@ CITES <- list(
   list(t = "Sentiment (sentimentr)", w = "Sentence-level polarity with valence shifters (negators/amplifiers). WEAK on congressional/promotional prose - read with caveats.",
        c = "Rinker, T. W. (2021). sentimentr: Calculate Text Polarity Sentiment. R package version 2.9.0. CRAN.",
        u = "https://CRAN.R-project.org/package=sentimentr"),
+  list(t = "Partisan language (weighted log-odds)", w = "D-vs-R distinctive words, z-scored with an informative Dirichlet prior, computed WITHIN issues to separate framing from agenda; de-leaked by message family. Implemented with the tidylo package (Silge, Hayes & Schnoebelen).",
+       c = "Monroe, B. L., Colaresi, M. P., & Quinn, K. M. (2008). Fightin' Words: Lexical Feature Selection and Evaluation for Identifying the Content of Political Conflict. Political Analysis, 16(4), 372-403.",
+       u = "https://doi.org/10.1093/pan/mpn018"),
   list(t = "Columnar store (DuckDB)", w = "In-process analytical database backing the corpus + precomputed layers.",
        c = "Raasveldt, M., & Muhleisen, H. (2019). DuckDB: an Embeddable Analytical Database. SIGMOD '19, 1981-1984.",
        u = "https://doi.org/10.1145/3299869.3320212")
@@ -124,6 +127,22 @@ ui <- page_navbar(
                  "WITHIN an issue where possible.")
       ),
       uiOutput("tone_body")
+    )
+  ),
+  nav_panel(
+    "Partisan Language", icon = icon("comments"),
+    layout_sidebar(
+      sidebar = sidebar(
+        selectInput("pl_scope", "Scope", choices = NULL),
+        helpText(tags$b("Words each party uses more"), " — Monroe et al. (2008) ",
+                 "weighted log-odds. ", tags$b("Within an issue"), " these reflect ",
+                 "framing / rhetoric; ", tags$b("(overall)"), " mixes framing with ",
+                 "agenda (which party raises a topic at all). De-leaked by message ",
+                 "family. Residual proper nouns / place names are byline noise."),
+        textOutput("pl_caption")
+      ),
+      card(card_header("Distinctive words — Republican (left) vs Democratic (right)"),
+           plotlyOutput("pl_plot", height = 620))
     )
   ),
   nav_panel(
@@ -299,6 +318,39 @@ server <- function(input, output, session) {
     datatable(dash$sentiment_sources |> transmute(source = SOURCE_LABEL[source],
                 mean = mean_sent, median = med_sent, n),
               rownames = FALSE, options = list(dom = "t"))
+  })
+
+  ## Partisan language (Monroe weighted log-odds)
+  if (!is.null(dash$partisan_scopes)) {
+    scs <- dash$partisan_scopes$scope
+    updateSelectInput(session, "pl_scope",
+                      choices = c("(overall)", sort(setdiff(scs, "(overall)"))),
+                      selected = "(overall)")
+  }
+  output$pl_caption <- renderText({
+    req(input$pl_scope, !is.null(dash$partisan_scopes))
+    s <- dash$partisan_scopes[dash$partisan_scopes$scope == input$pl_scope, ]
+    if (!nrow(s)) return("")
+    sprintf("%s by %s Democratic and %s Republican releases (de-leaked).",
+            if (input$pl_scope == "(overall)") "Released" else "On this issue, released",
+            format(s$n_d_docs, big.mark = ","), format(s$n_r_docs, big.mark = ","))
+  })
+  output$pl_plot <- renderPlotly({
+    validate(need(!is.null(dash$partisan_terms),
+                  "Partisan layer not in this build (run nlp/run_partisan.R then prep)."))
+    req(input$pl_scope)
+    d <- dash$partisan_terms |> filter(scope == input$pl_scope) |>
+      group_by(lean) |> slice_max(abs(z), n = 18) |> ungroup()
+    validate(need(nrow(d) > 0, "No terms for this scope."))
+    d$word <- factor(d$word, levels = d$word[order(d$z)])
+    p <- ggplot(d, aes(z, word, fill = lean,
+          text = sprintf("%s\nz = %.1f   (D uses %s, R uses %s)", word, z,
+                         format(n_d, big.mark = ","), format(n_r, big.mark = ",")))) +
+      geom_col() + geom_vline(xintercept = 0, color = "grey60") +
+      scale_fill_manual(values = c(D = unname(PARTY_COL["D"]), R = unname(PARTY_COL["R"]))) +
+      labs(x = "<- more Republican      weighted log-odds (z)      more Democratic ->",
+           y = NULL, fill = NULL) + theme_pr()
+    ggplotly(p, tooltip = "text")
   })
 
   ## Coordinated messaging

@@ -36,6 +36,7 @@ whole corpus into memory — stream per year via the `nlp_stream_years()` helper
 | Issue-tag completion | `run_tag_complete.R` | `issue_labels`, `tagmodel.rds` (per-issue glmnet, group-aware by family) |
 | Topic model | `run_topics.R` | `topic_dictionary`, `topic_trends` (STM, K=40) |
 | Sentiment | `run_sentiment.R` → `dashboard/persist_sentiment.R` | `sentiment.rds` → `sentiment` table |
+| Partisan language | `run_partisan.R` | `partisan_terms`, `partisan_scopes` (Monroe et al. 2008 weighted log-odds via tidylo; overall + per-issue, de-leaked) |
 | Dashboard aggregates | `dashboard/prep_dashboard.R` | `dashboard/dashboard.rds` |
 
 `run_foundation.R` is the original combined foundation+families runner (pre
@@ -54,9 +55,10 @@ shiny::runApp("nlp/dashboard/app.R")
 
 Precompute-then-serve (bslib): loads `dashboard.rds` at startup and queries the
 DuckDB `releases` table live only for Explore + drill-downs (short-lived
-read-only connections). Seven tabs: Overview, Issue Trends, Topics (STM), Tone
-(sentiment), Coordinated Messaging, Explore, and **Data & Methods** (sources +
-verified method citations).
+read-only connections). Eight tabs: Overview, Issue Trends, Topics (STM), Tone
+(sentiment), Partisan Language (Monroe weighted log-odds, overall + within-issue),
+Coordinated Messaging, Explore, and **Data & Methods** (sources + verified method
+citations).
 
 ## Caveats
 
