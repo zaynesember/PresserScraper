@@ -5,7 +5,7 @@
 # (2010-2026) + folded external datasets (Stout 114-117, Wang & Tucker 109-115).
 suppressMessages({
   library(shiny); library(bslib); library(DT); library(plotly)
-  library(ggplot2); library(dplyr); library(DBI); library(duckdb)
+  library(ggplot2); library(dplyr); library(DBI); library(duckdb); library(visNetwork)
 })
 
 NLP  <- file.path(dirname(tools::R_user_dir("pressR", "data")), "pressR_nlp")
@@ -24,6 +24,24 @@ qd <- function(sql, params = NULL) {
 }
 fmt <- function(x) format(x, big.mark = ",")
 HAS_SENT <- tryCatch({ qd("SELECT 1 FROM sentiment LIMIT 1"); TRUE }, error = function(e) FALSE)
+NETW <- dash$network
+
+# node colors for the member network, by the chosen scheme
+net_node_color <- function(nd, by) {
+  if (by == "party")
+    return(ifelse(nd$party == "D", "#2166ac", ifelse(nd$party == "R", "#b2182b", "#777777")))
+  if (by == "ideology") {
+    nm <- nd$nominate; out <- rep("#cccccc", length(nm)); ok <- !is.na(nm)
+    if (any(ok)) {
+      sc <- pmin(pmax((nm[ok] + 1) / 2, 0), 1)               # NOMINATE ~[-1,1] -> [0,1]
+      cr <- grDevices::colorRamp(c("#2166ac", "#dddddd", "#b2182b"))(sc)
+      out[ok] <- grDevices::rgb(cr[, 1], cr[, 2], cr[, 3], maxColorValue = 255)
+    }
+    return(out)
+  }
+  pal <- grDevices::hcl.colors(max(nd$community, na.rm = TRUE), "Dark 3")
+  pal[nd$community]
+}
 
 theme_pr <- function() theme_minimal(base_size = 13) +
   theme(legend.position = "top", panel.grid.minor = element_blank())
@@ -50,6 +68,9 @@ CITES <- list(
   list(t = "Graph components (igraph)", w = "Union of near-dup edges -> connected components = message families.",
        c = "Csardi, G., & Nepusz, T. (2006). The igraph software package for complex network research. InterJournal, Complex Systems, 1695.",
        u = "https://igraph.org"),
+  list(t = "Coordination network (communities + ideology)", w = "Members linked by shared message families; Louvain communities, weighted-betweenness brokerage, ideological homophily vs DW-NOMINATE. Built with igraph, rendered with visNetwork.",
+       c = "Blondel, V. D., Guillaume, J.-L., Lambiotte, R., & Lefebvre, E. (2008). Fast unfolding of communities in large networks. J. Stat. Mech., P10008. Ideology: Voteview (Lewis, Poole, Rosenthal, Boche, Rudkin & Sonnet).",
+       u = "https://voteview.com/"),
   list(t = "Issue-tag completion (glmnet)", w = "Per-issue one-vs-rest ridge logistic regression on tf-idf, group-aware splits by family_id; test macro-F1 ~0.78.",
        c = "Friedman, J. H., Hastie, T., & Tibshirani, R. (2010). Regularization Paths for Generalized Linear Models via Coordinate Descent. Journal of Statistical Software, 33(1), 1-22.",
        u = "https://doi.org/10.18637/jss.v033.i01"),
@@ -162,6 +183,31 @@ ui <- page_navbar(
         card(card_header("Message families - click a row"), DTOutput("cm_table")),
         card(card_header(textOutput("cm_title")), uiOutput("cm_detail")),
         col_widths = c(7, 5)
+      )
+    )
+  ),
+  nav_panel(
+    "Member Network", icon = icon("circle-nodes"),
+    layout_sidebar(
+      sidebar = sidebar(
+        radioButtons("net_color", "Color nodes by",
+          c("Party" = "party", "Community" = "community", "Ideology (DW-NOMINATE)" = "ideology")),
+        sliderInput("net_minw", "Min tie strength",
+          min = floor((NETW$w_min %||% 0) * 100) / 100, max = round(NETW$w_max %||% 1, 2),
+          value = NETW$w_default %||% 0, step = 0.05),
+        checkboxInput("net_crossonly", "Cross-party ties only", FALSE),
+        helpText("Members are linked when they share a near-duplicate message family ",
+          "(joint statements, sign-on letters, reused talking points), de-leaked; ",
+          "scraped corpus 2010-26. Tie strength down-weights mass sign-ons; node size = ",
+          "betweenness. Click a node to highlight its ties."),
+        textOutput("net_caption")
+      ),
+      card(visNetworkOutput("net", height = "560px")),
+      layout_columns(
+        card(card_header("Top cross-party brokers"), DTOutput("net_brokers")),
+        card(card_header("Cross-party share of coordination over time"),
+             plotlyOutput("net_ts", height = 280)),
+        col_widths = c(6, 6)
       )
     )
   ),
@@ -393,6 +439,53 @@ server <- function(input, output, session) {
   output$dl_families <- downloadHandler(
     filename = function() "pressR_message_families.csv",
     content = function(file) write.csv(cm_data(), file, row.names = FALSE))
+
+  ## Member network
+  output$net_caption <- renderText({
+    req(NETW); s <- NETW$summary
+    sprintf("%s members · %s ties · %s communities. Modularity %.2f; party homophily %.2f; ideological homophily %.2f; %.0f%% of ties cross party.",
+      s$n_nodes, format(s$n_edges, big.mark = ","), s$n_communities,
+      s$modularity, s$assort_party, s$assort_nominate, s$pct_edges_crossparty)
+  })
+  output$net <- renderVisNetwork({
+    req(NETW)
+    e <- NETW$edges[NETW$edges$weight >= input$net_minw, , drop = FALSE]
+    if (isTRUE(input$net_crossonly)) e <- e[e$cross_party, , drop = FALSE]
+    validate(need(nrow(e) > 0, "No ties at this strength."))
+    ids <- unique(c(e$a, e$b))
+    nd <- NETW$nodes[NETW$nodes$name %in% ids, , drop = FALSE]
+    vn <- data.frame(id = nd$name, label = nd$name, value = nd$betweenness + 1,
+      title = sprintf("<b>%s</b> (%s, %s)<br>community %s<br>cross-party share %.0f%%<br>DW-NOMINATE %s",
+        nd$name, nd$party, nd$chamber, nd$community, 100 * nd$cross_party_share,
+        ifelse(is.na(nd$nominate), "n/a", sprintf("%.2f", nd$nominate))),
+      color = net_node_color(nd, input$net_color), stringsAsFactors = FALSE)
+    ve <- data.frame(from = e$a, to = e$b, value = e$weight,
+      color = ifelse(e$cross_party, "rgba(70,70,70,0.55)", "rgba(180,180,180,0.30)"),
+      stringsAsFactors = FALSE)
+    visNetwork(vn, ve) |>
+      visIgraphLayout(layout = "layout_with_fr", smooth = FALSE) |>
+      visNodes(scaling = list(min = 8, max = 40)) |>
+      visEdges(scaling = list(min = 0.5, max = 6)) |>
+      visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE),
+                 nodesIdSelection = TRUE) |>
+      visPhysics(enabled = FALSE)
+  })
+  output$net_brokers <- renderDT({
+    req(NETW)
+    datatable(NETW$brokers |>
+      transmute(member = name, party, chamber, betweenness,
+                `xparty wt` = cross_party_strength, `xparty %` = round(100 * cross_party_share),
+                NOMINATE = round(nominate, 2)),
+      rownames = FALSE, options = list(pageLength = 8, dom = "tp"))
+  })
+  output$net_ts <- renderPlotly({
+    req(NETW)
+    p <- ggplot(NETW$ts, aes(yr, xparty_share)) +
+      geom_line(color = "#6a51a3", linewidth = 0.9) + geom_point(size = 1) +
+      scale_y_continuous(labels = scales::percent) +
+      labs(x = NULL, y = "cross-party share of coordinated families") + theme_pr()
+    ggplotly(p)
+  })
 
   ## Explore (live query)
   ex_query <- reactive({

@@ -96,6 +96,20 @@ if (has_table("partisan_terms")) {
   partisan_scopes <- q("SELECT * FROM partisan_scopes")
 }
 
+# ---- coordination network: members linked by shared message families ----
+network <- NULL
+if (has_table("network_nodes")) {
+  nn   <- q("SELECT * FROM network_nodes")
+  ne   <- q("SELECT * FROM network_edges")
+  nts  <- q("SELECT * FROM network_ts")
+  nsum <- q("SELECT * FROM network_summary")
+  brokers <- nn[nn$party %in% c("D","R"), ]
+  brokers <- brokers[order(-brokers$cross_party_strength), ][seq_len(min(25, nrow(brokers))), ]
+  thr <- if (nrow(ne) > 600) sort(ne$weight, decreasing = TRUE)[600] else min(ne$weight)
+  network <- list(nodes = nn, edges = ne, ts = nts, summary = nsum, brokers = brokers,
+                  w_min = min(ne$weight), w_max = max(ne$weight), w_default = round(thr, 3))
+}
+
 dbDisconnect(con, shutdown = TRUE)
 
 dash <- list(
@@ -107,6 +121,7 @@ dash <- list(
   sentiment_trends = sentiment_trends, sentiment_by_issue = sentiment_by_issue,
   sentiment_sources = sentiment_sources,
   partisan_terms = partisan_terms, partisan_scopes = partisan_scopes,
+  network = network,
   built_at = as.character(Sys.time())
 )
 dir.create(file.path(NLP, "dashboard"), showWarnings = FALSE)
@@ -125,3 +140,7 @@ cat(sprintf("  sources: %s | sentiment: %s\n",
 cat(sprintf("  partisan: %s\n",
   if (is.null(partisan_terms)) "ABSENT (run nlp/run_partisan.R first)" else
     sprintf("%d term rows across %d scopes", nrow(partisan_terms), nrow(partisan_scopes))))
+cat(sprintf("  network: %s\n",
+  if (is.null(network)) "ABSENT (run nlp/run_network.R first)" else
+    sprintf("%d members, %d edges, %d communities", network$summary$n_nodes,
+            network$summary$n_edges, network$summary$n_communities)))
