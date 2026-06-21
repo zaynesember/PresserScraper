@@ -13,13 +13,18 @@ nlp_build_duckdb <- function(db_path = nlp_duckdb_path(), overwrite = TRUE) {
 
   total <- 0L
   nlp_stream_years(function(df, yr) {
+    if (is.null(df$source)) df$source <- "scraped"
     df <- nlp_add_flags(df)
     # Stable column order; coerce date to character for duckdb DATE parsing.
+    # `source` carries provenance (scraped / stout / wangtucker).
     keep <- c("url","date","title","name","state","district","party","committee",
-              "chamber","cms","tags","body","body_nchar","body_ntokens",
+              "chamber","cms","tags","body","source","body_nchar","body_ntokens",
               "has_body","is_stub","has_url","has_nav","is_spanish","usable")
     df <- df[, keep, drop = FALSE]
     df$date <- as.character(df$date)
+    # type-stable VARCHAR across heterogeneous sources (scraped district may be chr)
+    df$district <- as.character(df$district)
+    df$tags <- as.character(df$tags)
     if (!dbExistsTable(con, "releases")) {
       dbWriteTable(con, "releases", df)
     } else {

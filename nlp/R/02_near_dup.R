@@ -17,8 +17,9 @@ nlp_load_for_dedup <- function() {
   parts <- nlp_stream_years(function(df, yr) {
     df <- nlp_add_flags(df)
     df <- df[df$usable, , drop = FALSE]
+    if (is.null(df$source)) df$source <- "scraped"
     tibble(url = df$url, name = df$name, party = df$party, chamber = df$chamber,
-           date = as.Date(df$date), ntok = df$body_ntokens,
+           source = df$source, date = as.Date(df$date), ntok = df$body_ntokens,
            nbody = nlp_normalize_body(df$body))
   })
   bind_rows(parts)
@@ -95,7 +96,9 @@ nlp_build_families <- function(near_dup = TRUE, jaccard = 0.7, quiet = FALSE) {
       n_members = n_distinct(name),
       n_parties = n_distinct(party[!is.na(party)]),
       n_chambers = n_distinct(chamber),
+      n_sources = n_distinct(source),
       parties = paste(sort(unique(party[!is.na(party)])), collapse="/"),
+      sources = paste(sort(unique(source)), collapse="/"),
       date_min = min(date, na.rm=TRUE), date_max = max(date, na.rm=TRUE),
       .groups = "drop"
     ) %>%
@@ -104,13 +107,15 @@ nlp_build_families <- function(near_dup = TRUE, jaccard = 0.7, quiet = FALSE) {
       cross_member = n_members > 1,
       cross_party = n_parties > 1,
       cross_chamber = n_chambers > 1,
+      cross_source = n_sources > 1,   # same text in >1 collection = mechanical dup,
+                                      # NOT coordinated messaging -> filterable
       span_days = as.integer(date_max - date_min)
     )
 
   per <- d %>%
-    select(url, name, party, chamber, date, family_id, ut_id) %>%
+    select(url, name, party, chamber, source, date, family_id, ut_id) %>%
     left_join(fam %>% select(family_id, n_docs, n_members, is_reused,
-                             cross_member, cross_party, cross_chamber),
+                             cross_member, cross_party, cross_chamber, cross_source),
               by = "family_id")
 
   list(per_release = per, families = fam)

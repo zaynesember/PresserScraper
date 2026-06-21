@@ -24,16 +24,34 @@ nlp_duckdb_path <- function() file.path(nlp_out_dir(), "press.duckdb")
 # internal -> use :::, valid under devtools::load_all).
 nlp_year_files <- function() pressR:::archive_files(pressR:::archive_dir())
 
+# Folded external datasets (Stout, Wang & Tucker) live in their own dir as
+# year-partitioned RDS with the archive schema + a `source` column, so they never
+# touch the scraped archive. Built by nlp/run_external.R.
+nlp_external_dir <- function(create = FALSE) {
+  d <- file.path(nlp_out_dir(), "external")
+  if (create) dir.create(d, showWarnings = FALSE, recursive = TRUE)
+  d
+}
+nlp_external_files <- function() {
+  d <- nlp_external_dir()
+  if (!dir.exists(d)) return(character(0))
+  sort(list.files(d, pattern = "releases-[0-9]{4}\\.rds$", full.names = TRUE))
+}
+
 # Stream over year partitions: read one releases-YYYY.rds, apply `fun(df, year)`,
 # collect results. `fun` should return a SMALL object (never the bodies) so peak
-# RAM stays at one year's data. Returns a list keyed by year.
-nlp_stream_years <- function(fun, quiet = FALSE) {
+# RAM stays at one year's data. Returns a list keyed by year. With
+# include_external=TRUE (default) the folded external year files are streamed too;
+# every df is guaranteed a `source` column ("scraped" for the archive partitions).
+nlp_stream_years <- function(fun, quiet = FALSE, include_external = TRUE) {
   files <- nlp_year_files()
+  if (include_external) files <- c(files, nlp_external_files())
   out <- vector("list", length(files))
   for (i in seq_along(files)) {
     yr <- sub("^.*releases-([0-9]{4})\\.rds$", "\\1", files[i])
     if (!quiet) message(sprintf("  [%s] %s", yr, basename(files[i])))
     df <- readRDS(files[i])
+    if (is.null(df$source)) df$source <- "scraped"
     out[i] <- list(fun(df, yr))   # single-bracket+list keeps NULL returns (side-effect funs)
     rm(df); gc(FALSE)
   }
