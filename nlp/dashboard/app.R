@@ -80,6 +80,9 @@ CITES <- list(
   list(t = "Sentiment (sentimentr)", w = "Sentence-level polarity with valence shifters (negators/amplifiers). WEAK on congressional/promotional prose - read with caveats.",
        c = "Rinker, T. W. (2021). sentimentr: Calculate Text Polarity Sentiment. R package version 2.9.0. CRAN.",
        u = "https://CRAN.R-project.org/package=sentimentr"),
+  list(t = "Targeted tone (directed sentiment)", w = "Sentence-level sentimentr scored only on sentences that NAME a target (date-keyed presidents, parties, leaders, agencies, China); out-party attack = negativity aimed at the other party. De-leaked by family; validated on a sample.",
+       c = "Method (this project): sentence-window sentimentr (Rinker 2021) over a versioned entity gazetteer; cf. aspect-based sentiment analysis.",
+       u = NULL),
   list(t = "Partisan language (weighted log-odds)", w = "D-vs-R distinctive words, z-scored with an informative Dirichlet prior, computed WITHIN issues to separate framing from agenda; de-leaked by message family. Implemented with the tidylo package (Silge, Hayes & Schnoebelen).",
        c = "Monroe, B. L., Colaresi, M. P., & Quinn, K. M. (2008). Fightin' Words: Lexical Feature Selection and Evaluation for Identifying the Content of Political Conflict. Political Analysis, 16(4), 372-403.",
        u = "https://doi.org/10.1093/pan/mpn018"),
@@ -148,6 +151,24 @@ ui <- page_navbar(
                  "WITHIN an issue where possible.")
       ),
       uiOutput("tone_body")
+    )
+  ),
+  nav_panel(
+    "Targeted Tone", icon = icon("crosshairs"),
+    layout_sidebar(
+      sidebar = sidebar(
+        radioButtons("at_view", "View",
+          c("Out-party attack" = "attack", "Tone toward entity" = "entity")),
+        conditionalPanel("input.at_view == 'entity'",
+          selectInput("at_entity", "Entity", choices = NULL)),
+        helpText(tags$b("Directed tone."), " sentimentr scored only on sentences that ",
+          "NAME a target (presidents, parties, leaders, agencies, China). ",
+          tags$b("Out-party attack"), " = negativity aimed at the other party's president, ",
+          "party, or leaders. De-leaked by message family; validated on a 2019 sample. ",
+          "Residual co-mention noise averages out — suggestive, not definitive."),
+        textOutput("at_caption")
+      ),
+      uiOutput("at_body")
     )
   ),
   nav_panel(
@@ -439,6 +460,57 @@ server <- function(input, output, session) {
   output$dl_families <- downloadHandler(
     filename = function() "pressR_message_families.csv",
     content = function(file) write.csv(cm_data(), file, row.names = FALSE))
+
+  ## Targeted tone (directed attack / entity stance)
+  if (!is.null(dash$attack))
+    updateSelectInput(session, "at_entity", choices = dash$attack$entities,
+      selected = if ("trump" %in% dash$attack$entities) "trump" else dash$attack$entities[1])
+  output$at_caption <- renderText({
+    req(dash$attack); s <- dash$attack$summary
+    sprintf("Mean out-party attack: D %.3f vs R %.3f (higher = more hostile).",
+      s$mean_attack[s$party == "D"], s$mean_attack[s$party == "R"])
+  })
+  output$at_body <- renderUI({
+    if (is.null(dash$attack))
+      return(div(class = "alert alert-warning",
+        "Targeted-tone layer not in this build (run nlp/run_attack.R, then prep)."))
+    if (input$at_view == "attack")
+      tagList(
+        card(card_header("Out-party attack over time, by speaker party"),
+             plotlyOutput("at_trend", height = 420)),
+        card(card_header("Most hostile toward the out-party (de-leaked, >=40 targeted releases)"),
+             DTOutput("at_brokers")))
+    else
+      card(card_header(textOutput("at_etitle")), plotlyOutput("at_entity_plot", height = 460))
+  })
+  output$at_trend <- renderPlotly({
+    d <- dash$attack$by_party_year |> filter(party %in% c("D","R"))
+    p <- ggplot(d, aes(year, mean_attack, color = party, group = party,
+        text = sprintf("%s %d: %.3f (n=%s)", party, year, mean_attack, format(n, big.mark = ",")))) +
+      geom_hline(yintercept = 0, color = "grey70") +
+      geom_line(linewidth = 0.9) + geom_point(size = 1) +
+      scale_color_manual(values = PARTY_COL) +
+      labs(x = NULL, y = "mean out-party attack", color = NULL) + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
+  output$at_brokers <- renderDT({
+    datatable(dash$attack$brokers |>
+      transmute(member = name, party, `attack score` = mean_attack, `targeted releases` = n),
+      rownames = FALSE, options = list(pageLength = 10, dom = "tp"))
+  })
+  output$at_etitle <- renderText(sprintf("Tone toward '%s' by speaker party", input$at_entity))
+  output$at_entity_plot <- renderPlotly({
+    req(input$at_entity)
+    d <- dash$attack$entity_ts |> filter(entity_id == input$at_entity, sp_party %in% c("D","R"))
+    validate(need(nrow(d) > 0, "No data for this entity."))
+    p <- ggplot(d, aes(year, mean, color = sp_party, group = sp_party,
+        text = sprintf("%s speakers, %d: %.3f (n=%s)", sp_party, year, mean, format(n, big.mark = ",")))) +
+      geom_hline(yintercept = 0, color = "grey70") +
+      geom_line(linewidth = 0.9) + geom_point(size = 1) +
+      scale_color_manual(values = PARTY_COL) +
+      labs(x = NULL, y = "mean sentiment toward entity", color = "speaker") + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
 
   ## Member network
   output$net_caption <- renderText({

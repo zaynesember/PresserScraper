@@ -110,6 +110,27 @@ if (has_table("network_nodes")) {
                   w_min = min(ne$weight), w_max = max(ne$weight), w_default = round(thr, 3))
 }
 
+# ---- targeted tone / attack score (if present) ----
+attack <- NULL
+if (has_table("attack_scores")) {
+  dd <- "WITH d AS (
+      SELECT a.out_attack, r.name, r.party, r.year,
+        ROW_NUMBER() OVER (PARTITION BY rf.family_id ORDER BY a.url) rn
+      FROM attack_scores a JOIN releases r USING(url) LEFT JOIN release_family rf USING(url)
+      WHERE r.party IN ('D','R') AND a.out_attack IS NOT NULL)
+    SELECT * FROM d WHERE rn = 1"           # de-leak: one release per message family
+  abyp <- q(sprintf("SELECT party, year, ROUND(AVG(out_attack),4) mean_attack, COUNT(*) n
+    FROM (%s) WHERE year BETWEEN 2005 AND 2026 GROUP BY 1,2 ORDER BY 1,2", dd))
+  abrokers <- q(sprintf("SELECT name, party, ROUND(AVG(out_attack),4) mean_attack, COUNT(*) n
+    FROM (%s) GROUP BY 1,2 HAVING COUNT(*) >= 40 ORDER BY mean_attack DESC LIMIT 25", dd))
+  ets <- q("SELECT entity_id, entity_type, sp_party, year,
+    ROUND(SUM(mean_sentiment*n)/SUM(n),4) mean, SUM(n) n FROM entity_stance
+    WHERE sp_party IN ('D','R') GROUP BY 1,2,3,4 HAVING SUM(n) >= 20")
+  asum <- q(sprintf("SELECT party, ROUND(AVG(out_attack),4) mean_attack FROM (%s) GROUP BY 1", dd))
+  attack <- list(by_party_year = abyp, brokers = abrokers, entity_ts = ets, summary = asum,
+                 entities = sort(unique(ets$entity_id)))
+}
+
 dbDisconnect(con, shutdown = TRUE)
 
 dash <- list(
@@ -121,7 +142,7 @@ dash <- list(
   sentiment_trends = sentiment_trends, sentiment_by_issue = sentiment_by_issue,
   sentiment_sources = sentiment_sources,
   partisan_terms = partisan_terms, partisan_scopes = partisan_scopes,
-  network = network,
+  network = network, attack = attack,
   built_at = as.character(Sys.time())
 )
 dir.create(file.path(NLP, "dashboard"), showWarnings = FALSE)
@@ -144,3 +165,7 @@ cat(sprintf("  network: %s\n",
   if (is.null(network)) "ABSENT (run nlp/run_network.R first)" else
     sprintf("%d members, %d edges, %d communities", network$summary$n_nodes,
             network$summary$n_edges, network$summary$n_communities)))
+cat(sprintf("  attack: %s\n",
+  if (is.null(attack)) "ABSENT (run nlp/run_attack.R first)" else
+    sprintf("%d party-year rows, %d entities, %d brokers", nrow(attack$by_party_year),
+            length(attack$entities), nrow(attack$brokers))))
