@@ -16,7 +16,7 @@ nlp_build_duckdb <- function(db_path = nlp_duckdb_path(), overwrite = TRUE) {
     df <- nlp_add_flags(df)
     # Stable column order; coerce date to character for duckdb DATE parsing.
     keep <- c("url","date","title","name","state","district","party","committee",
-              "chamber","cms","body","body_nchar","body_ntokens",
+              "chamber","cms","tags","body","body_nchar","body_ntokens",
               "has_body","is_stub","has_url","has_nav","is_spanish","usable")
     df <- df[, keep, drop = FALSE]
     df$date <- as.character(df$date)
