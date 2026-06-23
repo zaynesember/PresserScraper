@@ -51,6 +51,35 @@ if (has_table("sentiment")) {
       FROM sentiment s JOIN releases r USING(url) GROUP BY 1 ORDER BY 4 DESC")
 }
 
+# ---- sentiment divergence by issue (D-R gap over time, baseline-adjusted) ----
+sentiment_divergence <- NULL
+if (has_table("sentiment")) {
+  dv <- q("WITH dedup AS (
+      SELECT r.url, r.party, r.year, s.sentiment, COALESCE(il.office_issues, il.predicted_issues) iss,
+             ROW_NUMBER() OVER (PARTITION BY rf.family_id ORDER BY r.url) rn
+      FROM releases r JOIN sentiment s USING(url) LEFT JOIN release_family rf USING(url)
+           JOIN issue_labels il USING(url)
+      WHERE r.party IN ('D','R') AND r.usable AND COALESCE(il.office_issues, il.predicted_issues) IS NOT NULL),
+    long AS (SELECT party, year, sentiment, trim(u.iss) issue
+             FROM dedup, unnest(string_split(iss, ';')) AS u(iss) WHERE rn = 1 AND trim(u.iss) <> '')
+    SELECT issue, party, year, AVG(sentiment) ms, COUNT(*) n
+    FROM long WHERE year BETWEEN 2010 AND 2025 GROUP BY 1,2,3")
+  wdv <- dv |> tidyr::pivot_wider(names_from = party, values_from = c(ms, n)) |>
+    filter(!is.na(ms_D), !is.na(ms_R), n_D >= 30, n_R >= 30) |> mutate(gap = ms_D - ms_R)
+  base_yr <- wdv |> group_by(year) |>
+    summarise(overall = round(weighted.mean(gap, n_D + n_R), 4), .groups = "drop")
+  wdv <- wdv |> left_join(base_yr, by = "year") |> mutate(excess = gap - overall)
+  div <- wdv |> group_by(issue) |> summarise(
+      early = mean(excess[year %in% 2010:2013]), late = mean(excess[year %in% 2021:2024]),
+      level = mean(gap[year %in% 2021:2024]),
+      ne = sum(year %in% 2010:2013), nl = sum(year %in% 2021:2024), .groups = "drop") |>
+    filter(ne >= 2, nl >= 2) |>
+    transmute(issue, early = round(early, 4), late = round(late, 4),
+              change = round(late - early, 4), level = round(level, 4)) |>
+    arrange(desc(change))
+  sentiment_divergence <- list(by_issue = div, baseline = base_yr)
+}
+
 # ---- issue trends (within-year share), office-only and office+predicted ----
 issue_trend <- function(label_expr) {
   long <- q(sprintf("
@@ -106,7 +135,10 @@ if (has_table("network_nodes")) {
   brokers <- nn[nn$party %in% c("D","R"), ]
   brokers <- brokers[order(-brokers$cross_party_strength), ][seq_len(min(25, nrow(brokers))), ]
   thr <- if (nrow(ne) > 600) sort(ne$weight, decreasing = TRUE)[600] else min(ne$weight)
+  xpi <- if (has_table("network_xparty_issue")) q("SELECT * FROM network_xparty_issue ORDER BY xparty_rate DESC") else NULL
+  xpc <- if (has_table("network_xparty_chamber")) q("SELECT * FROM network_xparty_chamber") else NULL
   network <- list(nodes = nn, edges = ne, ts = nts, summary = nsum, brokers = brokers,
+                  xparty_issue = xpi, xparty_chamber = xpc,
                   w_min = min(ne$weight), w_max = max(ne$weight), w_default = round(thr, 3))
 }
 
@@ -131,6 +163,23 @@ if (has_table("attack_scores")) {
                  entities = sort(unique(ets$entity_id)))
 }
 
+# ---- readability / sentence complexity (if present) ----
+readability <- NULL
+if (has_table("readability")) {
+  rd_party <- q("SELECT party, year, ROUND(AVG(fk_grade),2) fk_grade, ROUND(AVG(flesch),1) flesch,
+      ROUND(AVG(fog),2) fog, ROUND(AVG(sent_len),1) sent_len, ROUND(AVG(syll),3) syll, COUNT(*) n
+    FROM readability WHERE party IN ('D','R') AND year BETWEEN 2005 AND 2026 GROUP BY 1,2 ORDER BY 1,2")
+  rd_issue <- q(sprintf("SELECT trim(iss) issue, ROUND(AVG(rd.fk_grade),2) fk_grade,
+      ROUND(AVG(rd.flesch),1) flesch, ROUND(AVG(rd.fog),2) fog, ROUND(AVG(rd.sent_len),1) sent_len,
+      ROUND(AVG(rd.syll),3) syll, COUNT(*) n
+    FROM readability rd JOIN issue_labels il USING(url), %s AS u(iss)
+    WHERE trim(iss) <> '' GROUP BY 1 HAVING COUNT(*) >= 200",
+    splitfn("COALESCE(il.office_issues, il.predicted_issues)")))
+  rd_source <- q("SELECT source, ROUND(AVG(fk_grade),2) fk_grade, ROUND(AVG(flesch),1) flesch,
+      ROUND(AVG(sent_len),1) sent_len, COUNT(*) n FROM readability GROUP BY 1 ORDER BY 5 DESC")
+  readability <- list(by_party_year = rd_party, by_issue = rd_issue, by_source = rd_source)
+}
+
 dbDisconnect(con, shutdown = TRUE)
 
 dash <- list(
@@ -140,9 +189,9 @@ dash <- list(
   issues = issues, topic_dict = topic_dict, topic_trends = topic_trends,
   fam_top = fam_top, members = members, years = years,
   sentiment_trends = sentiment_trends, sentiment_by_issue = sentiment_by_issue,
-  sentiment_sources = sentiment_sources,
+  sentiment_sources = sentiment_sources, sentiment_divergence = sentiment_divergence,
   partisan_terms = partisan_terms, partisan_scopes = partisan_scopes,
-  network = network, attack = attack,
+  network = network, attack = attack, readability = readability,
   built_at = as.character(Sys.time())
 )
 dir.create(file.path(NLP, "dashboard"), showWarnings = FALSE)
@@ -169,3 +218,6 @@ cat(sprintf("  attack: %s\n",
   if (is.null(attack)) "ABSENT (run nlp/run_attack.R first)" else
     sprintf("%d party-year rows, %d entities, %d brokers", nrow(attack$by_party_year),
             length(attack$entities), nrow(attack$brokers))))
+cat(sprintf("  readability: %s\n",
+  if (is.null(readability)) "ABSENT (run nlp/run_readability.R + persist first)" else
+    sprintf("%d party-year rows, %d issues", nrow(readability$by_party_year), nrow(readability$by_issue))))

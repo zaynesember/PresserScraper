@@ -41,6 +41,28 @@ ts <- as.data.table(dbGetQuery(con, "
   FROM families WHERE sources = 'scraped' AND date_min IS NOT NULL
   GROUP BY 1 HAVING CAST(EXTRACT(year FROM date_min) AS INT) BETWEEN 2010 AND 2026
   ORDER BY 1"))
+# which issues draw cross-party coordination (a family is "on" each top_issue its
+# releases touch; rate = share of coordinating families on that issue that are cross-party)
+xp_issue <- as.data.table(dbGetQuery(con, "
+  WITH fam AS (SELECT family_id, cross_party FROM families
+               WHERE is_reused AND cross_member AND sources='scraped'),
+       fi AS (SELECT DISTINCT f.family_id, f.cross_party, il.top_issue AS issue
+              FROM fam f JOIN release_family rf USING(family_id) JOIN issue_labels il USING(url)
+              WHERE il.top_issue IS NOT NULL)
+  SELECT issue, COUNT(*) n_coord, SUM(cross_party::INT) n_xparty,
+         ROUND(100.0*AVG(cross_party::INT),1) xparty_rate
+  FROM fi GROUP BY 1 HAVING COUNT(*) >= 25 ORDER BY xparty_rate DESC"))
+# cross-party rate by chamber scope (intra-House / intra-Senate / cross-chamber)
+xp_chamber <- as.data.table(dbGetQuery(con, "
+  WITH fam AS (SELECT family_id, cross_party FROM families
+               WHERE is_reused AND cross_member AND sources='scraped'),
+       fch AS (SELECT f.family_id, f.cross_party,
+                 CASE WHEN COUNT(DISTINCT r.chamber)>1 THEN 'cross-chamber'
+                      WHEN MAX(r.chamber)='house' THEN 'House-only' ELSE 'Senate-only' END AS \"scope\"
+               FROM fam f JOIN release_family rf USING(family_id) JOIN releases r USING(url)
+               GROUP BY 1,2)
+  SELECT \"scope\", COUNT(*) n_coord, SUM(cross_party::INT) n_xparty,
+         ROUND(100.0*AVG(cross_party::INT),1) xparty_rate FROM fch GROUP BY 1 ORDER BY 2 DESC"))
 dbDisconnect(con, shutdown = TRUE)
 ts[, xparty_share := round(n_xparty / n_coord, 3)]
 
@@ -123,8 +145,11 @@ dbWriteTable(con, "network_nodes", as.data.frame(nodes),     overwrite = TRUE)
 dbWriteTable(con, "network_edges", as.data.frame(edges_out), overwrite = TRUE)
 dbWriteTable(con, "network_ts",    as.data.frame(ts),        overwrite = TRUE)
 dbWriteTable(con, "network_summary", as.data.frame(summ),    overwrite = TRUE)
+dbWriteTable(con, "network_xparty_issue",   as.data.frame(xp_issue),   overwrite = TRUE)
+dbWriteTable(con, "network_xparty_chamber", as.data.frame(xp_chamber), overwrite = TRUE)
 dbDisconnect(con, shutdown = TRUE)
-saveRDS(list(nodes = nodes, edges = edges_out, ts = ts, summary = summ),
+saveRDS(list(nodes = nodes, edges = edges_out, ts = ts, summary = summ,
+             xparty_issue = xp_issue, xparty_chamber = xp_chamber),
         file.path(OUT, "network.rds"))
 
 cat("\n================ COORDINATION NETWORK (scraped v1) ================\n")
@@ -138,5 +163,8 @@ cat("\nCommunity sizes (top 8) + party mix:\n")
 cm <- nodes[, .(n = .N, D = sum(party=="D"), R = sum(party=="R"), I = sum(party=="I")),
             by = community][order(-n)][1:8]
 print(cm)
-cat(sprintf("\nartifacts: network.rds, duckdb network_nodes/edges/ts/summary\n"))
+cat("\nCross-party rate by chamber scope:\n"); print(xp_chamber)
+cat("\nMost bipartisan issues (highest cross-party coordination rate):\n")
+print(head(xp_issue, 8)); cat("Least bipartisan:\n"); print(tail(xp_issue, 6))
+cat(sprintf("\nartifacts: network.rds, duckdb network_nodes/edges/ts/summary/xparty_issue/xparty_chamber\n"))
 cat(sprintf("done in %.1f min\n", as.numeric(difftime(Sys.time(), t0, units = "mins"))))

@@ -71,6 +71,9 @@ CITES <- list(
   list(t = "Coordination network (communities + ideology)", w = "Members linked by shared message families; Louvain communities, weighted-betweenness brokerage, ideological homophily vs DW-NOMINATE. Built with igraph, rendered with visNetwork.",
        c = "Blondel, V. D., Guillaume, J.-L., Lambiotte, R., & Lefebvre, E. (2008). Fast unfolding of communities in large networks. J. Stat. Mech., P10008. Ideology: Voteview (Lewis, Poole, Rosenthal, Boche, Rudkin & Sonnet).",
        u = "https://voteview.com/"),
+  list(t = "Readability / complexity (quanteda.textstats)", w = "Per release: Flesch reading ease, Flesch-Kincaid grade, Gunning Fog, words/sentence, syllables/word.",
+       c = "quanteda.textstats (Benoit et al. 2018), implementing the Flesch-Kincaid, Gunning Fog, and Flesch reading-ease formulas.",
+       u = "https://CRAN.R-project.org/package=quanteda.textstats"),
   list(t = "Issue-tag completion (glmnet)", w = "Per-issue one-vs-rest ridge logistic regression on tf-idf, group-aware splits by family_id; test macro-F1 ~0.78.",
        c = "Friedman, J. H., Hastie, T., & Tibshirani, R. (2010). Regularization Paths for Generalized Linear Models via Coordinate Descent. Journal of Statistical Software, 33(1), 1-22.",
        u = "https://doi.org/10.18637/jss.v033.i01"),
@@ -101,7 +104,7 @@ ui <- page_navbar(
       value_box("Releases", fmt(ov$n_total), showcase = icon("file-lines"),
                 p(sprintf("%s-%s · %s%% with body text", substr(ov$dmin,1,4), substr(ov$dmax,1,4), ov$pct_body))),
       value_box("Issue-labeled", paste0(ov$pct_labeled, "%"), theme = "info",
-                showcase = icon("tags"), p(sprintf("%s%% office-tagged, rest predicted", ov$pct_office_tagged))),
+                showcase = icon("tags"), p(sprintf("%s%% office-tagged, rest model-assigned", ov$pct_office_tagged))),
       value_box("Reuse text", paste0(ov$pct_reused, "%"), theme = "warning",
                 showcase = icon("copy"), p(sprintf("%s reused families", fmt(ov$n_reused_fam)))),
       value_box("Cross-party messages", fmt(ov$n_xparty), theme = "secondary",
@@ -123,7 +126,7 @@ ui <- page_navbar(
                        selected = c("Health Care","Economy & Jobs","Immigration & Border","Environment & Climate"),
                        multiple = TRUE),
         radioButtons("it_chamber", "Chamber", c("Both","House","Senate"), inline = TRUE),
-        radioButtons("it_src", "Labels", c("Office + predicted" = "all", "Office-tagged only" = "office")),
+        radioButtons("it_src", "Labels", c("Office + model-assigned" = "all", "Office-tagged only" = "office")),
         downloadButton("dl_trends", "Download trend data (CSV)", class = "btn-sm btn-outline-primary"),
         helpText("Share = % of a party's labeled releases that year touching the issue. ",
                  "2010 (sparse) and 2026 (partial) are caveated endpoints.")
@@ -144,7 +147,8 @@ ui <- page_navbar(
     "Tone", icon = icon("face-smile"),
     layout_sidebar(
       sidebar = sidebar(
-        radioButtons("sent_unit", "View", c("Over time" = "time", "By issue" = "issue")),
+        radioButtons("sent_unit", "View",
+          c("Over time" = "time", "By issue" = "issue", "Issue divergence" = "divergence")),
         helpText(tags$b("Caveat:"), " off-the-shelf sentiment (sentimentr) is a weak, ",
                  "noisy measure on congressional / promotional prose: most releases skew ",
                  "mildly positive. Read differences as suggestive, not definitive; compare ",
@@ -188,6 +192,27 @@ ui <- page_navbar(
     )
   ),
   nav_panel(
+    "Readability", icon = icon("book-open-reader"),
+    layout_sidebar(
+      sidebar = sidebar(
+        selectInput("rd_metric", "Measure", c(
+          "Flesch-Kincaid grade (higher = harder)" = "fk_grade",
+          "Gunning Fog index (higher = harder)"    = "fog",
+          "Flesch reading ease (higher = easier)"  = "flesch",
+          "Words per sentence"                     = "sent_len",
+          "Syllables per word"                     = "syll")),
+        helpText("Readability / sentence complexity of release bodies (quanteda.textstats). ",
+          "Congressional prose is dense — typically a college-to-graduate reading level."),
+        textOutput("rd_caption")
+      ),
+      layout_columns(
+        card(card_header("Over time, by party"), plotlyOutput("rd_trend", height = 400)),
+        card(card_header("By issue (top 18 by volume)"), plotlyOutput("rd_issue", height = 400)),
+        col_widths = c(7, 5)
+      )
+    )
+  ),
+  nav_panel(
     "Coordinated Messaging", icon = icon("share-nodes"),
     layout_sidebar(
       sidebar = sidebar(
@@ -210,6 +235,7 @@ ui <- page_navbar(
   nav_panel(
     "Member Network", icon = icon("circle-nodes"),
     layout_sidebar(
+      fillable = FALSE,   # tab stacks graph (520px) + two plot rows -> let it scroll, not squeeze
       sidebar = sidebar(
         radioButtons("net_color", "Color nodes by",
           c("Party" = "party", "Community" = "community", "Ideology (DW-NOMINATE)" = "ideology")),
@@ -223,13 +249,16 @@ ui <- page_navbar(
           "betweenness. Click a node to highlight its ties."),
         textOutput("net_caption")
       ),
-      card(visNetworkOutput("net", height = "560px")),
+      card(visNetworkOutput("net", height = "520px")),
       layout_columns(
         card(card_header("Top cross-party brokers"), DTOutput("net_brokers")),
-        card(card_header("Cross-party share of coordination over time"),
-             plotlyOutput("net_ts", height = 280)),
-        col_widths = c(6, 6)
-      )
+        card(card_header("Bipartisan coordination over time"),
+             plotlyOutput("net_ts", height = 300),
+             div(class = "small text-muted px-2", textOutput("net_xpchamber"))),
+        col_widths = c(5, 7)
+      ),
+      card(card_header("Which issues draw cross-party coordination (% of coordinating families that are cross-party)"),
+           plotlyOutput("net_xpissue", height = 380))
     )
   ),
   nav_panel(
@@ -258,20 +287,53 @@ ui <- page_navbar(
     "Data & Methods", icon = icon("book"),
     div(class = "container-fluid", style = "max-width:1000px",
       h3("Corpus & sources"),
-      p("This dashboard analyzes congressional press releases from three sources, ",
-        "merged into one store with a ", tags$code("source"), " provenance column. ",
-        "Counts and date ranges:"),
+      p("A corpus of U.S. congressional press releases assembled from several sources and merged ",
+        "into one DuckDB store with a ", tags$code("source"), " provenance column. Releases are ",
+        "scraped per member office, de-duplicated by URL, written as year-partitioned xz files, and ",
+        "loaded into DuckDB for columnar querying. Member metadata (name, state, district, party, ",
+        "chamber, committee) is carried throughout; issue tags are kept as each office filed them."),
       DTOutput("dm_sources"),
+      p(class = "small text-muted mt-2",
+        "The scraper detects each office's content-management system (Drupal, ASP.NET, WordPress ",
+        "REST, headless-WordPress GraphQL, or a generic fallback) and routes to a dedicated ",
+        "extractor. The two external datasets and the Internet-Archive backfill of former members ",
+        "are mapped to the same schema; their raw files are not redistributed."),
+      h3("Analysis pipeline", class = "mt-4"),
+      tags$ol(class = "small",
+        tags$li(tags$b("Message families"), " — near-duplicate bodies (MinHash/LSH over 5-gram ",
+          "shingles, Jaccard >= 0.7) grouped via connected components into coordination families; ",
+          "the de-leak primitive every other layer reuses."),
+        tags$li(tags$b("Issue labels"), " — office-filed tags canonicalized to 31 issues via a ",
+          "versioned crosswalk; the rest model-assigned by per-issue ridge classifiers on sublinear ",
+          "tf-idf, with group-aware splits by family (test macro-F1 0.79)."),
+        tags$li(tags$b("Topics"), " — a 40-topic structural topic model (prevalence ~ party + chamber ",
+          "+ s(year)) on a family-deduped, year-stratified sample."),
+        tags$li(tags$b("Sentiment & targeted tone"), " — document-level sentiment, plus directed tone ",
+          "toward named targets (an out-party attack score), scored on mention sentences only."),
+        tags$li(tags$b("Partisan language"), " — Monroe weighted log-odds for D-vs-R distinctive ",
+          "words, overall and conditioned within each issue."),
+        tags$li(tags$b("Coordination network & readability"), " — the member co-messaging graph ",
+          "(communities, brokers, ideological homophily) and classic readability / complexity ",
+          "measures.")),
       h3("Methods & citations", class = "mt-4"),
       p(class = "text-muted small",
-        "Classical-R NLP pipeline. Each layer is precomputed and served from a DuckDB store. ",
-        "Citations verified against publisher / DOI / CRAN pages."),
+        "Each layer is precomputed and served from DuckDB. Citations verified against publisher / ",
+        "DOI / CRAN pages."),
       uiOutput("dm_methods"),
-      p(class = "text-muted small mt-3",
-        "Honest-caveat notes: issue-tag availability is missing-not-at-random by CMS ",
-        "(some offices never tag), so predicted labels on never-tagged offices are ",
-        "extrapolation; folded external datasets overlap the scraped corpus in time, so ",
-        "some releases appear in more than one collection (flagged cross_source).")
+      h3("Caveats", class = "mt-4"),
+      tags$ul(class = "small",
+        tags$li(tags$b("MNAR issue tags:"), " tag availability is missing-not-at-random by CMS — ",
+          "some offices never tag — so model-assigned labels on never-tagged offices are ",
+          "extrapolation, not validated against ground truth there."),
+        tags$li(tags$b("Cross-source duplicates:"), " folded datasets overlap the scraped corpus in ",
+          "time, so a release can appear in more than one collection; these are flagged ",
+          tags$code("cross_source"), " and de-leaked by family."),
+        tags$li(tags$b("Sentiment is weak on promotional prose:"), " off-the-shelf sentiment skews ",
+          "mildly positive — read the gap and the trend, not absolute values."),
+        tags$li(tags$b("Coverage skew:"), " pre-2015 under-represents short-serving members; the ",
+          "Internet-Archive backfill of former members is closing this gap."),
+        tags$li(tags$b("Other:"), " within-year proportions; 2004 and 2026 are partial endpoints; ",
+          "some folded member names are derived and join imperfectly across sources."))
     )
   ),
   nav_spacer(),
@@ -355,9 +417,17 @@ server <- function(input, output, session) {
       tagList(card(card_header("Mean release sentiment over time, by party"),
                    plotlyOutput("tone_trend", height = 460)),
               card(card_header("Mean sentiment by source"), DTOutput("tone_src")))
-    else
+    else if (input$sent_unit == "issue")
       card(card_header("Mean sentiment by issue (D vs R)"),
            plotlyOutput("tone_issue", height = 640))
+    else
+      tagList(
+        card(card_header("Issue-specific D-R divergence (2010-13 -> 2021-24, baseline-adjusted)"),
+             plotlyOutput("tone_divergence", height = 600)),
+        div(class = "small text-muted px-2",
+          "Bars = change in the issue's D-R sentiment gap after removing each year's overall ",
+          "D-R drift (which itself tracks who holds the White House). Blue = pulled toward ",
+          "Democratic-warmer tone; red = toward Republican-warmer. Directional only (sentimentr is noisy)."))
   })
   output$tone_trend <- renderPlotly({
     d <- dash$sentiment_trends |> filter(party %in% c("D","R"))
@@ -385,6 +455,19 @@ server <- function(input, output, session) {
     datatable(dash$sentiment_sources |> transmute(source = SOURCE_LABEL[source],
                 mean = mean_sent, median = med_sent, n),
               rownames = FALSE, options = list(dom = "t"))
+  })
+  output$tone_divergence <- renderPlotly({
+    req(dash$sentiment_divergence)
+    d <- dash$sentiment_divergence$by_issue
+    d$dir <- ifelse(d$change >= 0, "D", "R")
+    d$issue <- factor(d$issue, levels = d$issue[order(d$change)])
+    p <- ggplot(d, aes(change, issue, fill = dir,
+        text = sprintf("%s\nchange %+.3f (excess D-R gap %.3f -> %.3f)", issue, change, early, late))) +
+      geom_col() + geom_vline(xintercept = 0, color = "grey60") +
+      scale_fill_manual(values = c(D = unname(PARTY_COL["D"]), R = unname(PARTY_COL["R"])), guide = "none") +
+      labs(x = "<- more Republican-warmer   change in D-R gap   more Democratic-warmer ->", y = NULL) +
+      theme_pr()
+    ggplotly(p, tooltip = "text")
   })
 
   ## Partisan language (Monroe weighted log-odds)
@@ -460,6 +543,35 @@ server <- function(input, output, session) {
   output$dl_families <- downloadHandler(
     filename = function() "pressR_message_families.csv",
     content = function(file) write.csv(cm_data(), file, row.names = FALSE))
+
+  ## Readability / sentence complexity
+  RD_LAB <- c(fk_grade = "Flesch-Kincaid grade", fog = "Gunning Fog index",
+              flesch = "Flesch reading ease", sent_len = "words per sentence",
+              syll = "syllables per word")
+  output$rd_caption <- renderText({
+    req(dash$readability); s <- dash$readability$by_source
+    sprintf("By source — %s", paste(sprintf("%s FK %.1f", SOURCE_LABEL[s$source], s$fk_grade), collapse = " · "))
+  })
+  output$rd_trend <- renderPlotly({
+    req(dash$readability); m <- input$rd_metric
+    d <- dash$readability$by_party_year |> filter(party %in% c("D","R"))
+    d$val <- d[[m]]
+    p <- ggplot(d, aes(year, val, color = party, group = party,
+        text = sprintf("%s %d: %.2f (n=%s)", party, year, val, format(n, big.mark = ",")))) +
+      geom_line(linewidth = 0.9) + geom_point(size = 1) +
+      scale_color_manual(values = PARTY_COL) +
+      labs(x = NULL, y = unname(RD_LAB[m]), color = NULL) + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
+  output$rd_issue <- renderPlotly({
+    req(dash$readability); m <- input$rd_metric
+    d <- dash$readability$by_issue; d$val <- d[[m]]
+    d <- d |> slice_max(n, n = 18) |> arrange(val)
+    d$issue <- factor(d$issue, levels = d$issue)
+    p <- ggplot(d, aes(val, issue, text = sprintf("%s: %.2f (n=%s)", issue, val, format(n, big.mark = ",")))) +
+      geom_col(fill = "#2c3e50") + labs(x = unname(RD_LAB[m]), y = NULL) + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
 
   ## Targeted tone (directed attack / entity stance)
   if (!is.null(dash$attack))
@@ -552,11 +664,33 @@ server <- function(input, output, session) {
   })
   output$net_ts <- renderPlotly({
     req(NETW)
-    p <- ggplot(NETW$ts, aes(yr, xparty_share)) +
-      geom_line(color = "#6a51a3", linewidth = 0.9) + geom_point(size = 1) +
+    d <- NETW$ts
+    p <- ggplot(d, aes(yr, xparty_share,
+        text = sprintf("%d: %.0f%% cross-party (%d of %d coordinating families)",
+                       yr, 100 * xparty_share, n_xparty, n_coord))) +
+      geom_line(color = "#6a51a3", linewidth = 0.8) +
+      geom_point(aes(size = n_coord), color = "#6a51a3") +
       scale_y_continuous(labels = scales::percent) +
-      labs(x = NULL, y = "cross-party share of coordinated families") + theme_pr()
-    ggplotly(p)
+      scale_size_area(max_size = 7, guide = "none") +
+      labs(x = NULL, y = "cross-party share of coordinating families") + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
+  output$net_xpchamber <- renderText({
+    req(NETW$xparty_chamber)
+    paste0("Cross-party rate by chamber scope — ",
+      paste(sprintf("%s %.0f%%", NETW$xparty_chamber$scope, NETW$xparty_chamber$xparty_rate), collapse = " · "),
+      ". Point size = coordinating families that year; early years are small-n and noisy.")
+  })
+  output$net_xpissue <- renderPlotly({
+    req(NETW$xparty_issue)
+    d <- NETW$xparty_issue
+    d$issue <- factor(d$issue, levels = d$issue[order(d$xparty_rate)])
+    p <- ggplot(d, aes(xparty_rate, issue, fill = xparty_rate,
+        text = sprintf("%s: %.0f%% cross-party (%d of %d coordinating families)",
+                       issue, xparty_rate, n_xparty, n_coord))) +
+      geom_col() + scale_fill_gradient(low = "#cccccc", high = "#1a9850", guide = "none") +
+      labs(x = "% of coordinating families that are cross-party", y = NULL) + theme_pr()
+    ggplotly(p, tooltip = "text")
   })
 
   ## Explore (live query)
