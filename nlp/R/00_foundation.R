@@ -35,7 +35,9 @@ nlp_external_dir <- function(create = FALSE) {
 nlp_external_files <- function() {
   d <- nlp_external_dir()
   if (!dir.exists(d)) return(character(0))
-  sort(list.files(d, pattern = "releases-[0-9]{4}\\.rds$", full.names = TRUE))
+  # recursive so subdirs (e.g. external/wayback/) are streamed too; each source
+  # tags its own `source` column, so the duckdb build keeps provenance straight.
+  sort(list.files(d, pattern = "releases-[0-9]{4}\\.rds$", full.names = TRUE, recursive = TRUE))
 }
 
 # Stream over year partitions: read one releases-YYYY.rds, apply `fun(df, year)`,
