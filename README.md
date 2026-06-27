@@ -6,7 +6,7 @@ Automating the collection of U.S. Congress members' press releases.
 (`*.senate.gov`) members' websites over a date range and returns a tidy data
 frame. Instead of guessing among dozens of CSS/XPath selectors per site, it
 **detects the content-management system** behind each site and routes to a
-dedicated extractor. Coverage is ~99% of the House and ~97% of the Senate.
+dedicated extractor. Coverage is ~99% of the House and ~99% of the Senate.
 
 ## Why CMS detection
 
@@ -117,11 +117,13 @@ maintainers with write access, `publish_archive()`). Both need the suggested
 ## A look at the data
 
 Archiving accumulates a tidy, one-row-per-release corpus across both chambers.
-A snapshot of the first half of 2026:
+The published snapshot — fetch it with `download_archive()` — currently holds:
 
-- **24,122 releases** from **538 member sites**, 2026-01-01 to 2026-06-19
-- **~97%** carry full body text, plus issue tags wherever the CMS exposes them
-- **House** — 15,604 (9,512 D · 6,044 R · 48 I) · **Senate** — 8,518 (5,264 D · 3,000 R · 131 I)
+- **436,201 releases** from 537 member offices, **2010 through mid-2026**
+- **~94%** carry full body text; issue tags wherever the CMS exposes them (~41% overall)
+- **House** — 282,687 · **Senate** — 153,514 · by party ≈ 262k D · 173k R · 0.7k I
+
+A reproducible recent slice (what `scrape_house(from = "2026-01-01")` yields):
 
 ```r
 read_archive(from = "2026-01-01")
@@ -155,6 +157,16 @@ a |> filter(!is.na(tags)) |> separate_rows(tags, sep = ";") |> count(tags, sort 
 Issue tags and state names are recorded as each chamber/office formats them, so
 synonyms ("Health Care" vs "Healthcare") and mixed state forms (House full names,
 Senate two-letter codes) appear — normalize before aggregating if needed.
+
+## NLP layer & dashboard
+
+An exploratory analysis layer built on the archived corpus — near-duplicate
+"message family" detection, issue-tag completion, structural topic models, and
+sentiment, plus a Shiny dashboard — lives in [`nlp/`](nlp/). It also folds in two
+external congressional press-release datasets (Stout 114–117; Wang & Tucker
+109–115) for historical depth, taking the combined corpus to ~894k releases back
+to 2004. This is research code, kept separate from the installable package; see
+[`nlp/README.md`](nlp/README.md) for the pipeline and how to run it.
 
 ## Development
 
