@@ -10,3 +10,8 @@ docs/
 
 # Session scratch — not part of the package
 SESSION_PROGRESS.md
+
+# Blog: large external congressional-comms datasets (tweets / CrowdTangle-Facebook /
+# newsletters) — ~8.7 GB, derived/third-party, not for git. Keep blog/ itself trackable
+# (posts, notebooks, reference PDFs) but never the bulk data.
+blog/data/
