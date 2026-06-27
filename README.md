@@ -6,7 +6,7 @@ Automating the collection of U.S. Congress members' press releases.
 (`*.senate.gov`) members' websites over a date range and returns a tidy data
 frame. Instead of guessing among dozens of CSS/XPath selectors per site, it
 **detects the content-management system** behind each site and routes to a
-dedicated extractor. Coverage is ~99% of the House and ~97% of the Senate.
+dedicated extractor. Coverage is ~99% of the House and ~99% of the Senate.
 
 ## Why CMS detection
 
@@ -114,6 +114,60 @@ assets; fetch them without scraping via `download_archive()` (and, for
 maintainers with write access, `publish_archive()`). Both need the suggested
 **piggyback** package.
 
+## A look at the data
+
+Archiving accumulates a tidy, one-row-per-release corpus across both chambers.
+The published snapshot — fetch it with `download_archive()` — currently holds:
+
+- **436,201 releases** from 537 member offices, **2010 through mid-2026**
+- **~94%** carry full body text; issue tags wherever the CMS exposes them (~41% overall)
+- **House** — 282,687 · **Senate** — 153,514 · by party ≈ 262k D · 173k R · 0.7k I
+
+A reproducible recent slice (what `scrape_house(from = "2026-01-01")` yields):
+
+```r
+read_archive(from = "2026-01-01")
+#> # A tibble: 24,122 × 12
+#>   name             state party chamber date       title                                tags        cms
+#>   <chr>            <chr> <chr> <chr>    <date>     <chr>                                <chr>       <chr>
+#> 1 Latta, Robert    Ohio  R     house   2026-06-17 Latta Applauds FDA Approval of New … Veterans    aspx
+#> 2 Hyde-Smith, Cindy MS   R     senate  2026-04-23 Hyde-Smith Backs Bill to Reauthoriz… Health Care drupal
+#> 3 Clark, Katherine Mass… D     house   2026-06-18 Whip Clark Celebrates Reopening of … Health Care wordpress
+#> # … plus district, committee, body, url
+```
+
+Every release is dated, attributed (member, state, party, chamber, committee),
+and topic-tagged, so the corpus is ready for quick analysis:
+
+```r
+library(dplyr); library(tidyr)
+a <- read_archive(from = "2026-01-01")
+
+# Most-used issue tags
+a |> filter(!is.na(tags)) |> separate_rows(tags, sep = ";") |> count(tags, sort = TRUE)
+#>   tags            n
+#>   Education    1198
+#>   Veterans     1088
+#>   Immigration   811
+#>   Health Care   775
+#>   Agriculture   584
+#>   # …
+```
+
+Issue tags and state names are recorded as each chamber/office formats them, so
+synonyms ("Health Care" vs "Healthcare") and mixed state forms (House full names,
+Senate two-letter codes) appear — normalize before aggregating if needed.
+
+## NLP layer & dashboard
+
+An exploratory analysis layer built on the archived corpus — near-duplicate
+"message family" detection, issue-tag completion, structural topic models, and
+sentiment, plus a Shiny dashboard — lives in [`nlp/`](nlp/). It also folds in two
+external congressional press-release datasets (Stout 114–117; Wang & Tucker
+109–115) for historical depth, taking the combined corpus to ~894k releases back
+to 2004. This is research code, kept separate from the installable package; see
+[`nlp/README.md`](nlp/README.md) for the pipeline and how to run it.
+
 ## Development
 
 ```r
@@ -124,6 +178,11 @@ devtools::check()
 
 The original grad-school notebook implementation is preserved under
 [`legacy/`](legacy/) for reference.
+
+## Acknowledgements
+
+Some of the original legacy code (under [`legacy/`](legacy/)) was generously
+provided by Chris Stout.
 
 ## License
 

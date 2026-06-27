@@ -82,12 +82,25 @@ strip_chrome <- function(node) {
   "statement", "statements", "all"
 )
 clean_issue_tags <- function(x) {
-  x <- trimws(x[!is.na(x) & nzchar(trimws(x))])
+  x <- trimws(decode_entities(x[!is.na(x) & nzchar(trimws(x))]))
   x <- x[!(tolower(x) %in% .tag_type_labels)]
   x <- x[!grepl("^[0-9]+(st|nd|rd|th)\\s+congress$", x, ignore.case = TRUE)]
-  x <- unique(x)
+  x <- unique(x[nzchar(x)])
   if (length(x) == 0) return(NA_character_)
   paste(x, collapse = ";")
+}
+
+# Decode the handful of HTML entities that show up in JSON-sourced term names
+# (REST/GraphQL), which -- unlike HTML-scraped text -- arrive still encoded.
+decode_entities <- function(x) {
+  x <- gsub("&amp;|&#0*38;", "&", x)
+  x <- gsub("&#0*39;|&#8217;|&#0*146;|&rsquo;|&lsquo;", "'", x)
+  x <- gsub("&quot;|&#0*34;", '"', x)
+  x <- gsub("&#8211;|&ndash;", "-", x)
+  x <- gsub("&nbsp;|&#0*160;", " ", x)
+  x <- gsub("&lt;", "<", x, fixed = TRUE)
+  x <- gsub("&gt;", ">", x, fixed = TRUE)
+  x
 }
 
 # Shared helper: collect tag/issue text from the first selector that matches.

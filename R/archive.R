@@ -138,11 +138,21 @@ publish_archive <- function(dir = archive_dir(), repo = "zaynesember/pressR",
   files <- archive_files(dir)
   if (length(files) == 0) cli::cli_abort("No archive partitions in {.path {dir}}.")
 
-  # Ensure the release exists (ignore the error if it already does).
-  tryCatch(
-    piggyback::pb_release_create(repo = repo, tag = tag),
-    error = function(e) invisible(NULL)
-  )
+  # Ensure the release exists, using whichever creation API this piggyback
+  # version exposes (1.x: pb_release_create; 0.1.x: pb_new_release). Only create
+  # when the tag is absent, so re-publishing simply refreshes the assets.
+  ns <- getNamespaceExports("piggyback")
+  existing <- tryCatch(piggyback::pb_releases(repo = repo)$tag_name,
+                       error = function(e) character(0))
+  if (!tag %in% existing) {
+    if ("pb_release_create" %in% ns) {
+      piggyback::pb_release_create(repo = repo, tag = tag)
+    } else if ("pb_new_release" %in% ns) {
+      piggyback::pb_new_release(repo = repo, tag = tag)
+    } else {
+      cli::cli_abort("{.pkg piggyback} exposes neither {.fn pb_release_create} nor {.fn pb_new_release}.")
+    }
+  }
   for (f in files) {
     if (!quiet) cli::cli_alert_info("Uploading {.file {basename(f)}} to {repo}@{tag}.")
     piggyback::pb_upload(f, repo = repo, tag = tag)

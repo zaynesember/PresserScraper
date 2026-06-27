@@ -104,8 +104,13 @@ drupal_item_body <- function(doc, url) {
     "article",
     "main"
   ))
+  # Per-release issue tags. The official House "evo" template uses its own
+  # field class (.evo-press-release__field-evo-issues); other Drupal installs
+  # use the standard field-issues field. These are the release's own tags, not
+  # the site-wide issues nav menu.
   tags <- tags_from_selectors(doc, c(
     ".field--name-field-issues a",
+    ".evo-press-release__field-evo-issues a",
     ".views-field-field-issues a",
     ".field--type-entity-reference a"
   ))
