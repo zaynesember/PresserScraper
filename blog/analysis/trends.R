@@ -2,7 +2,7 @@ suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(DBI); library(duckdb); library(data.table); library(ggplot2)
   library(quanteda); library(quanteda.textstats) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 
 con <- dbConnect(duckdb::duckdb(), nlp_duckdb_path(), read_only = TRUE)
 # full-corpus FK components by year (scraped)
@@ -41,7 +41,7 @@ print(trendcor)
 
 long <- melt(M, id.vars="year", variable.name="metric")
 long[, metric := factor(metric, levels=names(M)[-1])]
-saveRDS(M, file.path(SCRATCH,"trends_data.rds"))
+saveRDS(M, file.path(FIG,"trends_data.rds"))
 p <- ggplot(long, aes(year, value)) +
   geom_line(linewidth=1.1, color="#2c3e50") + geom_point(size=2, color="#2c3e50") +
   geom_smooth(method="lm", se=FALSE, linewidth=0.7, color="#c0392b", linetype="dashed") +
@@ -56,5 +56,5 @@ p <- ggplot(long, aes(year, value)) +
         strip.text=element_text(face="bold", size=14),
         axis.text=element_text(size=12),
         panel.grid.minor=element_blank(), panel.spacing=unit(1, "lines"))
-ggsave(file.path(SCRATCH,"trends_hires.png"), p, width=18, height=11, dpi=170)
+ggsave(file.path(FIG,"trends_hires.png"), p, width=18, height=11, dpi=170)
 cat("\nsaved trends_hires.png\n")

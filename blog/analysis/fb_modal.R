@@ -2,7 +2,7 @@ suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(DBI); library(duckdb); library(data.table); library(ggplot2)
   library(quanteda); library(quanteda.textstats); library(jsonlite) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 set.seed(1)
 wps_of <- function(txt) textstat_readability(corpus(txt), measure="meanSentenceLength")$meanSentenceLength
 clean <- function(t){ t<-gsub("https?://\\S+"," ",t); t<-gsub("@\\w+"," ",t); t<-gsub("#\\w+"," ",t)
@@ -15,7 +15,12 @@ fb[, pty := fcase(pv %in% c("1","D","Democrat"), "D",
                   pv %in% c("0","R","Republican"), "R", default=NA_character_)]
 d1 <- grep("dwnom.*dim1|nominate.*1|dim1", names(fb), value=TRUE)[1]   # verify: D should be <0
 if (!is.na(d1)) { cat("VERIFY party mapping vs", d1, "(Democrats should be negative):\n")
-  print(fb[!is.na(pty) & is.finite(get(d1)), .(mean_dwnom1=round(mean(get(d1)),3), n=.N), by=pty]) }
+  chk <- fb[!is.na(pty) & is.finite(get(d1)), .(mean_dwnom1=round(mean(get(d1)),3), n=.N), by=pty]
+  print(chk)
+  mD <- chk[pty=="D", mean_dwnom1]; mR <- chk[pty=="R", mean_dwnom1]
+  if (length(mD) && length(mR) && !(mD < mR))
+    stop("FB party 0/1 dummy looks INVERTED: D mean DW-NOMINATE dim1 (", mD,
+         ") should be < R (", mR, "). Check the CEL 'dem' coding before trusting partisan FB results.") }
 fb <- fb[pty %in% c("D","R") & !is.na(Message) & nchar(Message)>120 & year %in% 2015:2024,
          .(party=pty, year, txt=Message)]
 fb <- fb[, .SD[sample(.N, min(.N,1500))], by=.(party,year)]
@@ -24,7 +29,7 @@ fby <- fb[is.finite(wps)&wps<80, .(wps=mean(wps), n=.N), by=.(party,year)][, mod
 rm(fb); invisible(gc()); cat("Facebook done:", sum(fby$n), "posts\n")
 
 ## ---- crosswalk + TWEETS ----
-ct <- fromJSON("/tmp/ct_historical-users-filtered.json", simplifyDataFrame=FALSE)
+ct <- fromJSON("/Users/zaynesember/GitRepos/pressR/blog/analysis/congresstweets_handle_party_crosswalk.json", simplifyDataFrame=FALSE)
 xw <- unique(rbindlist(lapply(ct, function(e){ if (is.null(e$type)||e$type!="member"||is.null(e$party)||!(e$party %in% c("D","R"))) return(NULL)
   rbindlist(lapply(e$accounts, function(a) list(sn=tolower(a$screen_name), party=e$party))) })))
 allf <- list.files("blog/data/congresstweets_115_118_tweets/JSONs", full.names=TRUE)
@@ -69,6 +74,6 @@ p <- ggplot(g, aes(year, gap, color=modality)) +
        x=NULL, y="D - R words per sentence", color=NULL) +
   theme_minimal(base_size=14) + theme(plot.title=element_text(face="bold"), legend.position="top",
     panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"time_gap_4modal.png"), p, width=11.5, height=6, dpi=160)
-saveRDS(g, file.path(SCRATCH,"time_gap_4modal_data.rds"))
+ggsave(file.path(FIG,"time_gap_4modal.png"), p, width=11.5, height=6, dpi=160)
+saveRDS(g, file.path(FIG,"time_gap_4modal_data.rds"))
 cat("\nsaved time_gap_4modal.png + data\n")

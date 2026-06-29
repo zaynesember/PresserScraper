@@ -2,7 +2,7 @@ suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(DBI); library(duckdb); library(data.table); library(ggplot2)
   library(quanteda); library(quanteda.textstats); library(jsonlite) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 set.seed(1)
 clean <- function(t){ t<-gsub("https?://\\S+"," ",t); t<-gsub("@\\w+"," ",t); t<-gsub("#\\w+"," ",t)
   t<-gsub("&amp;","and",t); trimws(gsub("\\s+"," ",t)) }
@@ -70,8 +70,8 @@ p <- ggplot(L, aes(year, z, color=modality)) +
   theme_minimal(base_size=13) +
   theme(plot.title=element_text(face="bold", size=16), plot.subtitle=element_text(size=11, color="grey30"),
         legend.position="top", strip.text=element_text(face="bold", size=11), panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"trends_modal.png"), p, width=15, height=10, dpi=150)
-saveRDS(A, file.path(SCRATCH,"trends_modal_data.rds"))
+ggsave(file.path(FIG,"trends_modal.png"), p, width=15, height=10, dpi=150)
+saveRDS(A, file.path(FIG,"trends_modal_data.rds"))
 cat("\n=== correlation of each metric with year, by mode (trend direction) ===\n")
 print(dcast(L[, .(r=round(cor(year, value, use="complete.obs"),2)), by=.(metric, modality)],
             metric ~ modality, value.var="r"))

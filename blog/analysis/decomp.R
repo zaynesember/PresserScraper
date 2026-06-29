@@ -1,7 +1,7 @@
 suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(DBI); library(duckdb); library(data.table); library(ggplot2) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 
 con <- dbConnect(duckdb::duckdb(), nlp_duckdb_path(), read_only = TRUE)
 d <- as.data.table(dbGetQuery(con, "
@@ -39,5 +39,5 @@ p <- ggplot(m, aes(year, grades, fill=component)) +
   theme_minimal(base_size=12) +
   theme(plot.title=element_text(face="bold"), legend.position="top",
         panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"decomp.png"), p, width=9, height=5.2, dpi=140)
+ggsave(file.path(FIG,"decomp.png"), p, width=9, height=5.2, dpi=140)
 cat("\nsaved decomp.png\n")

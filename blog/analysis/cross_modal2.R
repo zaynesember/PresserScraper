@@ -2,14 +2,14 @@ suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(DBI); library(duckdb); library(data.table); library(ggplot2)
   library(quanteda); library(quanteda.textstats); library(jsonlite) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 set.seed(1)
 RD <- function(txt) { co <- corpus(txt); r <- textstat_readability(co,
     measure=c("meanSentenceLength","meanWordSyllables","Flesch.Kincaid"))
   data.table(wps=r$meanSentenceLength, syll=r$meanWordSyllables, fk=r$Flesch.Kincaid) }
 
 ## crosswalk
-ct <- fromJSON("/tmp/ct_historical-users-filtered.json", simplifyDataFrame=FALSE)
+ct <- fromJSON("/Users/zaynesember/GitRepos/pressR/blog/analysis/congresstweets_handle_party_crosswalk.json", simplifyDataFrame=FALSE)
 xw <- unique(rbindlist(lapply(ct, function(e){ if (is.null(e$type)||e$type!="member"||is.null(e$party)||!(e$party %in% c("D","R"))) return(NULL)
   rbindlist(lapply(e$accounts, function(a) list(sn=tolower(a$screen_name), party=e$party))) })))
 
@@ -39,7 +39,7 @@ nl <- nl[!is.na(party) & nchar(Body)>300 & yr %in% 2019:2023][, .SD[sample(.N,mi
 rd_nl <- cbind(nl[, .(modality="Newsletters", party)], RD(nl$Body))
 con <- dbConnect(duckdb::duckdb(), nlp_duckdb_path(), read_only=TRUE)
 rel <- as.data.table(dbGetQuery(con, "SELECT party, sent_len AS wps, syll, fk_grade AS fk FROM readability
-  WHERE source='scraped' AND party IN ('D','R') AND sent_len IS NOT NULL AND year BETWEEN 2019 AND 2023 USING SAMPLE 14000"))
+  WHERE source='scraped' AND party IN ('D','R') AND sent_len IS NOT NULL AND year BETWEEN 2019 AND 2023 ORDER BY hash(url) LIMIT 14000"))
 dbDisconnect(con, shutdown=TRUE); rel[, modality:="Press releases"]
 ALL <- rbindlist(list(rel[,.(modality,party,wps,syll,fk)], rd_nl, rd_tr, rd_tc))[is.finite(wps)&is.finite(fk)&wps<80]
 
@@ -62,7 +62,7 @@ p1 <- ggplot(dec, aes(modality, grades, fill=component)) +
        x=NULL, y="D - R gap (Flesch-Kincaid grade levels)", fill="Gap comes from") +
   theme_minimal(base_size=14) + theme(plot.title=element_text(face="bold"), legend.position="top",
     panel.grid.minor=element_blank(), axis.text.x=element_text(face="bold"))
-ggsave(file.path(SCRATCH,"cm_decomp.png"), p1, width=11, height=6.5, dpi=160)
+ggsave(file.path(FIG,"cm_decomp.png"), p1, width=11, height=6.5, dpi=160)
 
 ## ---- hashtags / links / mentions as partisan FEATURES ----
 feat <- tw[, .(`% with a link`=100*mean(has_url), `mentions per tweet`=mean(n_ment),
@@ -76,7 +76,7 @@ p2 <- ggplot(fl, aes(party, value, fill=party)) + geom_col(width=0.65) +
        x=NULL, y=NULL) + theme_minimal(base_size=14) +
   theme(plot.title=element_text(face="bold"), strip.text=element_text(face="bold", size=11),
         panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"cm_features.png"), p2, width=12, height=4.6, dpi=160)
+ggsave(file.path(FIG,"cm_features.png"), p2, width=12, height=4.6, dpi=160)
 
 ## most partisan hashtags
 ht <- tw[, .(h=tolower(unlist(regmatches(text, gregexpr("#\\w+", text))))), by=party]
@@ -92,5 +92,5 @@ p3 <- ggplot(top, aes(rshare-0.5, h, fill=skew)) + geom_col() +
   labs(title="Most partisan hashtags (share of uses that are Republican; min 40 uses)",
        x="<- more Democratic        |        more Republican ->", y=NULL) +
   theme_minimal(base_size=13) + theme(plot.title=element_text(face="bold"), panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"cm_hashtags.png"), p3, width=11, height=7, dpi=150)
+ggsave(file.path(FIG,"cm_hashtags.png"), p3, width=11, height=7, dpi=150)
 cat("\nsaved cm_decomp.png, cm_features.png, cm_hashtags.png\n")

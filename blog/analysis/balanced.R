@@ -2,7 +2,7 @@ suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(DBI); library(duckdb); library(data.table); library(ggplot2)
   library(quanteda); library(quanteda.textstats) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 
 con <- dbConnect(duckdb::duckdb(), nlp_duckdb_path(), read_only = TRUE)
 yrs <- as.data.table(dbGetQuery(con, "SELECT rel.name AS name, COUNT(DISTINCT r.year) ny, COUNT(*) n
@@ -55,7 +55,7 @@ fkfull <- melt(fk_all[, .(`Flesch-Kincaid grade`=mean(fk_grade), `syllables / wo
                id.vars="year")[, set:="full corpus"]
 fkcoh  <- melt(fk[, .(`Flesch-Kincaid grade`=mean(fk_grade), `syllables / word`=mean(syll)), by=year],
                id.vars="year")[, set:="cohort (continuous)"]
-fd <- readRDS(file.path(SCRATCH,"trends_data.rds"))            # full-corpus vocab means (from trends step)
+fd <- readRDS(file.path(FIG,"trends_data.rds"))            # full-corpus vocab means (from trends step)
 vfull <- melt(fd[, .(year, `Dale-Chall (difficulty)`=`Dale-Chall (difficulty)`, `doc length (tokens)`=`doc length (tokens)`)],
               id.vars="year")[, set:="full corpus"]
 vcoh  <- melt(samp[, .(`Dale-Chall (difficulty)`=mean(dale), `doc length (tokens)`=mean(ntok)), by=year],
@@ -73,5 +73,5 @@ p <- ggplot(pl, aes(year, value, color=set)) +
   theme_minimal(base_size=15) +
   theme(plot.title=element_text(face="bold", size=17), legend.position="top",
         strip.text=element_text(face="bold", size=13), panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"balanced.png"), p, width=15, height=9.5, dpi=160)
+ggsave(file.path(FIG,"balanced.png"), p, width=15, height=9.5, dpi=160)
 cat("\nsaved balanced.png\n")

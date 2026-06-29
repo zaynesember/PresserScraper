@@ -2,14 +2,14 @@ suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(DBI); library(duckdb); library(data.table); library(ggplot2)
   library(quanteda); library(quanteda.textstats); library(jsonlite) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 set.seed(1)
 wps_of <- function(txt) textstat_readability(corpus(txt), measure="meanSentenceLength")$meanSentenceLength
 clean <- function(t){ t<-gsub("https?://\\S+"," ",t); t<-gsub("@\\w+"," ",t); t<-gsub("#\\w+"," ",t)
   t<-gsub("&amp;","and",t); trimws(gsub("\\s+"," ",t)) }
 
 ## crosswalk
-ct <- fromJSON("/tmp/ct_historical-users-filtered.json", simplifyDataFrame=FALSE)
+ct <- fromJSON("/Users/zaynesember/GitRepos/pressR/blog/analysis/congresstweets_handle_party_crosswalk.json", simplifyDataFrame=FALSE)
 xw <- unique(rbindlist(lapply(ct, function(e){ if (is.null(e$type)||e$type!="member"||is.null(e$party)||!(e$party %in% c("D","R"))) return(NULL)
   rbindlist(lapply(e$accounts, function(a) list(sn=tolower(a$screen_name), party=e$party))) })))
 
@@ -59,7 +59,7 @@ pA <- ggplot(g, aes(year, gap, color=modality)) +
        x=NULL, y="D - R words per sentence", color=NULL) +
   theme_minimal(base_size=14) + theme(plot.title=element_text(face="bold"), legend.position="top",
     panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"time_gap.png"), pA, width=11, height=6, dpi=160)
+ggsave(file.path(FIG,"time_gap.png"), pA, width=11, height=6, dpi=160)
 
 pB <- ggplot(Y[n>=120], aes(year, wps, color=party)) +
   geom_line(linewidth=1) + geom_point(size=1.8) +
@@ -70,5 +70,5 @@ pB <- ggplot(Y[n>=120], aes(year, wps, color=party)) +
        x=NULL, y="words per sentence", color="Party") +
   theme_minimal(base_size=14) + theme(plot.title=element_text(face="bold"), legend.position="top",
     strip.text=element_text(face="bold"), panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"time_levels.png"), pB, width=13, height=5, dpi=160)
+ggsave(file.path(FIG,"time_levels.png"), pB, width=13, height=5, dpi=160)
 cat("\nsaved time_gap.png, time_levels.png\n")

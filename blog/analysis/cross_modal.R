@@ -2,7 +2,7 @@ suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(DBI); library(duckdb); library(data.table); library(ggplot2)
   library(quanteda); library(quanteda.textstats); library(jsonlite) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 set.seed(1)
 WPS <- function(txt) {                          # words/sentence + FK per doc via quanteda
   co <- corpus(txt); r <- textstat_readability(co, measure=c("meanSentenceLength","Flesch.Kincaid"))
@@ -10,7 +10,7 @@ WPS <- function(txt) {                          # words/sentence + FK per doc vi
 }
 
 ## ---- handle -> party crosswalk (members only) ----
-ct <- fromJSON("/tmp/ct_historical-users-filtered.json", simplifyDataFrame=FALSE)
+ct <- fromJSON("/Users/zaynesember/GitRepos/pressR/blog/analysis/congresstweets_handle_party_crosswalk.json", simplifyDataFrame=FALSE)
 xw <- rbindlist(lapply(ct, function(e){
   if (is.null(e$type) || e$type!="member" || is.null(e$party) || !(e$party %in% c("D","R"))) return(NULL)
   rbindlist(lapply(e$accounts, function(a) list(sn=tolower(a$screen_name), party=e$party)))
@@ -47,7 +47,7 @@ nr <- WPS(nl$Body); news <- data.table(modality="Newsletters", party=nl$party, w
 con <- dbConnect(duckdb::duckdb(), nlp_duckdb_path(), read_only=TRUE)
 rel <- as.data.table(dbGetQuery(con, "SELECT party, sent_len AS wps, fk_grade AS fk
   FROM readability WHERE source='scraped' AND party IN ('D','R') AND sent_len IS NOT NULL
-    AND year BETWEEN 2019 AND 2023 USING SAMPLE 14000"))
+    AND year BETWEEN 2019 AND 2023 ORDER BY hash(url) LIMIT 14000"))
 dbDisconnect(con, shutdown=TRUE)
 rel[, modality := "Press releases"]
 
@@ -76,5 +76,5 @@ p <- ggplot(D, aes(party, wps, fill=party)) +
   theme_minimal(base_size=15) +
   theme(plot.title=element_text(face="bold", size=17), strip.text=element_text(face="bold", size=14),
         panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"cross_modal.png"), p, width=14, height=6.5, dpi=160)
+ggsave(file.path(FIG,"cross_modal.png"), p, width=14, height=6.5, dpi=160)
 cat("\nsaved cross_modal.png\n")

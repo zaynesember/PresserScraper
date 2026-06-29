@@ -2,14 +2,14 @@ suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(DBI); library(duckdb); library(data.table); library(ggplot2)
   library(quanteda); library(quanteda.textstats) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 
 # balanced sample: up to 500 scraped usable releases per party-year (2010-2025)
 con <- dbConnect(duckdb::duckdb(), nlp_duckdb_path(), read_only = TRUE)
 samp <- as.data.table(dbGetQuery(con, "
   SELECT url, party, year, body FROM (
     SELECT url, party, year, body,
-           row_number() OVER (PARTITION BY party, year ORDER BY random()) rn
+           row_number() OVER (PARTITION BY party, year ORDER BY hash(url)) rn  -- deterministic sample
     FROM releases
     WHERE source='scraped' AND usable AND body IS NOT NULL AND length(body) > 200
       AND party IN ('D','R') AND year BETWEEN 2010 AND 2025
@@ -50,5 +50,5 @@ p <- ggplot(long, aes(year, score, color=party)) +
   theme_minimal(base_size=12) +
   theme(plot.title=element_text(face="bold"), legend.position="top",
         panel.grid.minor=element_blank(), strip.text=element_text(face="bold", size=9))
-ggsave(file.path(SCRATCH,"soph.png"), p, width=11, height=4.8, dpi=140)
+ggsave(file.path(FIG,"soph.png"), p, width=11, height=4.8, dpi=140)
 cat("\nsaved soph.png\n")

@@ -1,7 +1,7 @@
 suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(data.table); library(ggplot2); library(quanteda); library(quanteda.textstats) })
-SCRATCH <- "/private/tmp/claude-501/-Users-zaynesember-GitRepos-pressR/4f90cad5-86dd-450b-a0ac-0a8f83f6520d/scratchpad"
+FIG <- "/Users/zaynesember/GitRepos/pressR/blog/figures"
 set.seed(1)
 clean <- function(t){ trimws(gsub("\\s+"," ", gsub("https?://\\S+"," ", t))) }
 
@@ -54,7 +54,7 @@ p1 <- ggplot(pe, aes(wbin, med_eng, color=era, group=era)) + geom_line(linewidth
        x="words per sentence (binned)", y="median interactions / 1k followers", color=NULL) +
   theme_minimal(base_size=14) + theme(plot.title=element_text(face="bold"), legend.position="top",
     axis.text.x=element_text(angle=35, hjust=1), panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"fb_engage_bins.png"), p1, width=10, height=6, dpi=150)
+ggsave(file.path(FIG,"fb_engage_bins.png"), p1, width=10, height=6, dpi=150)
 p2 <- ggplot(slopes, aes(year, within_slope)) + geom_hline(yintercept=0, color="grey60") +
   geom_line(linewidth=1, color="#2c3e50") + geom_point(size=2.4, color="#2c3e50") +
   scale_x_continuous(breaks=2015:2024) +
@@ -62,6 +62,6 @@ p2 <- ggplot(slopes, aes(year, within_slope)) + geom_hline(yintercept=0, color="
        subtitle="Within-member slope of log engagement on words/sentence, by year. Below 0 = shorter sentences -> more engagement.",
        x=NULL, y="within-member slope (log engagement per word/sentence)") +
   theme_minimal(base_size=14) + theme(plot.title=element_text(face="bold"), panel.grid.minor=element_blank())
-ggsave(file.path(SCRATCH,"fb_engage_slope.png"), p2, width=10, height=5.5, dpi=150)
-saveRDS(list(binned=binned, slopes=slopes, overall=ov), file.path(SCRATCH,"fb_engage_data.rds"))
+ggsave(file.path(FIG,"fb_engage_slope.png"), p2, width=10, height=5.5, dpi=150)
+saveRDS(list(binned=binned, slopes=slopes, overall=ov), file.path(FIG,"fb_engage_data.rds"))
 cat("\nsaved fb_engage_bins.png, fb_engage_slope.png\n")
