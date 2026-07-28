@@ -54,6 +54,10 @@ parse_date2 <- function(txt, url, ts) {
   um <- regmatches(url, regexpr("/[0-9]{4}/[0-9]{2}/[a-z]+([0-9]{6})", url, ignore.case = TRUE))
   if (length(um)) { dd <- regmatches(um, regexpr("[0-9]{6}", um))
     d <- suppressWarnings(as.Date(dd, "%y%m%d")); if (ok(d)) return(d) }
+  # root date-coded filename /MMDDYY[a].htm (early-2000s templates, e.g. cantor)
+  um <- regmatches(url, regexpr("/([0-9]{6})[a-z]?[.]s?html?$", url, ignore.case = TRUE))
+  if (length(um)) { dd <- regmatches(um, regexpr("[0-9]{6}", um))
+    d <- suppressWarnings(as.Date(dd, "%m%d%y")); if (ok(d)) return(d) }
   if (!is.na(tsd)) {
     # no-year dateline ("Washington, Aug 15 -"); skip month-days already trailed by a
     # year (those were an explicit date, tried + rejected above as out-of-window prose).
@@ -127,13 +131,13 @@ extract <- function(html, url, ts = "") {
 # key on it. Dedup collapses print/Itemid/encoding variants of the same release.
 cdx_articles <- function(host) {
   out <- list()
-  for (yr in seq(2007, 2015, by = 2)) {
+  for (yr in seq(2005, 2015, by = 2)) {
     u <- sprintf("http://web.archive.org/cdx/search/cdx?url=%s/*&output=json&collapse=urlkey&filter=statuscode:200&filter=mimetype:text/html&from=%d0101&to=%d1231&limit=8000",
                  host, yr, yr + 1)
     m <- tryCatch(resp_body_json(GET(u, 90), simplifyVector = TRUE), error = function(e) NULL)
     if (!is.null(m) && !is.null(dim(m)) && nrow(m) > 1)
       out[[length(out) + 1]] <- data.frame(ts = m[-1, 2], url = m[-1, 3], stringsAsFactors = FALSE)
-    Sys.sleep(THROTTLE)
+    Sys.sleep(max(THROTTLE, 5))   # CDX chokes on sub-second bursts; article fetches don't
   }
   d <- unique(do.call(rbind, out)); if (is.null(d) || !nrow(d)) return(d)
   p <- sub("^https?://[^/]+", "", d$url)
@@ -148,21 +152,39 @@ cdx_articles <- function(host) {
   # washington-dc-tourism-information, the-congressional-page-program) are not releases.
   jmadm  <- paste0("[?&]id=[0-9]+(%3a|:)[a-z0-9-]*(scheduling|tourism|intern|page-program|art-competition|",
                    "funding-request|academy-nomination|flag-request|casework|request-form|grant-|how-to)")
+  # query-string CFM articles (?sectionid=N[.N]&...&itemid=N, bare or via index.cfm;
+  # wolf/hall/matheson — matheson uses decimal sectionids like 49.2). option=com_
+  # excluded so old-Joomla lookalikes can't slip in through this branch.
+  is_cfm <- grepl("^/(index[.]cfm)?[?]", p, ignore.case = TRUE) &
+            grepl("[?&]sectionid=[0-9.]+", p, ignore.case = TRUE) &
+            grepl("[?&]itemid=[0-9]+", p, ignore.case = TRUE) &
+            !grepl("option=com_", p, ignore.case = TRUE)
   pos <- grepl("documentid=[0-9]+", p, ignore.case = TRUE) |
          grepl("^/[0-9]{4}/[0-9]{2}/[a-z][^/]*[.](shtml|html?|cfm|aspx?)$", p, ignore.case = TRUE) |
          (grepl("view=article", p, ignore.case = TRUE) & grepl("[?&]id=[0-9]+", p, ignore.case = TRUE)) |
          grepl("/news/[a-z0-9][a-z0-9._%-]*-[a-z0-9._%-]{4,}$", p, ignore.case = TRUE) |
-         grepl("/node/[0-9]+$", p, ignore.case = TRUE)
+         grepl("/node/[0-9]+$", p, ignore.case = TRUE) |
+         grepl("^/[0-9]{6}[a-z]?[.]s?html?$", p, ignore.case = TRUE) |            # root /MMDDYY[a].htm (cantor)
+         is_cfm |
+         grepl("/pressreleases?/archive/[0-9]{4}/[a-z0-9][a-z0-9._-]*[.]s?html?$", p, ignore.case = TRUE)  # static yearly archive (matheson)
   neg <- grepl(asset, p, ignore.case = TRUE) | grepl(printv, p, ignore.case = TRUE) |
          grepl(pagin, p, ignore.case = TRUE) | grepl(diridx, p, ignore.case = TRUE) |
-         grepl(jmidx, p, ignore.case = TRUE) | grepl(jmadm, p, ignore.case = TRUE)
+         grepl(jmidx, p, ignore.case = TRUE) | grepl(jmadm, p, ignore.case = TRUE) |
+         grepl("/index[.](s?html?|cfm|php|aspx?)$", p, ignore.case = TRUE)        # dir index files are listings
   d <- d[pos & !neg, , drop = FALSE]; if (!nrow(d)) return(d)
   pf <- sub("^https?://[^/]+", "", d$url)
+  # cfm articles are identified by section+item ids, not path (the path is just "/"
+  # or /index.cfm, so the query-stripping fallback would collapse them all).
+  cfm2 <- grepl("[?&]sectionid=[0-9.]+", pf, ignore.case = TRUE) &
+          grepl("[?&]itemid=[0-9]+", pf, ignore.case = TRUE)
+  cfmkey <- paste0("cfm", sub(".*[?&]sectionid=([0-9.]+).*", "\\1", tolower(pf)),
+                   "_",   sub(".*[?&]itemid=([0-9]+).*",   "\\1", tolower(pf)))
   d$key <- ifelse(grepl("documentid=", pf, ignore.case = TRUE),
                   sub(".*documentid=([0-9]+).*", "doc\\1", tolower(pf)),
+           ifelse(cfm2, cfmkey,
            ifelse(grepl("[?&]id=[0-9]+", pf, ignore.case = TRUE),
                   sub(".*[?&]id=([0-9]+).*", "jm\\1", tolower(pf)),
-                  sub("[?].*$", "", tolower(pf))))
+                  sub("[?].*$", "", tolower(pf)))))
   d <- d[!duplicated(d$key), , drop = FALSE]
   # Spread the capped fetch across the member's tenure: CDX returns URLs in
   # alphabetical urlkey order, so head(MAXART) would otherwise skew to a member's
@@ -190,6 +212,11 @@ backfill_member <- function(M) {
     if (is.na(h) || nchar(h) < 800) next
     ex <- extract(h, arts$url[i], arts$ts[i]); if (is.null(ex)) next
     if (is.na(ex$date) || nchar(ex$body) < 300 || ex$n_dates > 6 || nchar(ex$title) < 1 || isTRUE(ex$listing)) next
+    # soft 404s: removed pages archived as HTTP-200 "Page Not Found" templates
+    # (word-boundary-safe: a bare "error"/"not found" substring hits "tERRORist" etc.)
+    if (grepl("^page not found$|^(404|file) not found|^error( [0-9]{3})?$", trimws(ex$title), ignore.case = TRUE) ||
+        grepl("page (you requested )?(was |could )?not (be )?found|file you requested (was|could) not|sorry, the page",
+              substr(ex$body, 1, 300), ignore.case = TRUE)) next
     rows[[i]] <- data.table(date = ex$date, title = ex$title, body = ex$body, url = arts$url[i])
   }
   d <- rbindlist(rows)
