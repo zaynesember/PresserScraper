@@ -58,6 +58,16 @@ analyses can exclude them with one predicate.
   `<time datetime="Jul 27, 2026">` (ethics.house.gov) killed a whole feed this way and it
   collected as 0 rows. Parse page dates with `first_parseable_date()`, never
   `as.Date(substr(x, 1, 10))` — truncating to 10 chars also mangles non-ISO values.
+- **A feed's `listing` URL determines its `feed_id`,** which determines its output filename
+  (`feed_id = host#party#<last path segment of listing>`). Editing a listing URL therefore
+  *renames* the feed: the next run collects a new file and the old output is orphaned in
+  `data/raw/`, where the assembler still picks it up. Move the old file to `data/raw_stale/`
+  when you repoint a listing.
+- **Committee "newsroom" pages are often hubs, not archives.** budget.senate.gov's
+  `/<role>/newsroom` teases 5 recent items and does not paginate, while the archive behind its
+  "All Press" link paginates normally (`PageNum_rs`) — so the feed collected 5 items in 0.1 min
+  and looked finished. When a feed returns ~5-20 items with `pager: none`, check whether the
+  listing is a landing page before believing the committee is quiet.
 - **A thin haul is usually pagination, not a quiet committee.** `insti_detect_pager()` probes the
   live site, so it can return `none` for a listing that paginated fine an hour earlier; the walk
   then silently returns page 0 only. Because of that a re-collect can come back *smaller* than
