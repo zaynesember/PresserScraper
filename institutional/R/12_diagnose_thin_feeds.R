@@ -197,14 +197,20 @@ for (t in targets) {
   an <- listing_anatomy(doc, f$listing)
   cat("  same-origin anchors: ", nrow(an), "\n", sep = "")
 
-  hit <- grepl(f$item_re, an$href)
-  cat("  anchors matching item_re: ", sum(hit), "\n", sep = "")
+  # Case-insensitive: configs write "?id=" where several CFM hosts serve "?ID=",
+  # and the walker matches those anyway. A case-sensitive count here once
+  # reported "item_re matches nothing" for a feed the walker was reading fine,
+  # and the early exit below then skipped the archive hunt entirely.
+  hit <- grepl(f$item_re, an$href, ignore.case = TRUE)
+  cat("  anchors matching item_re: ", sum(hit),
+      " (case-insensitive; exact-case: ", sum(grepl(f$item_re, an$href)), ")\n", sep = "")
 
-  # What the walker itself extracts from page 0 (no item fetches -- fast).
+  # What the walker itself extracts from page 0 (no item fetches -- fast). This
+  # is the authority on whether item_re works, not the anchor count above.
   it <- insti_feed_items(doc, f$listing, f$item_re, date_from_item = FALSE)
   cat("  walker items on page 0: ", nrow(it), "\n", sep = "")
 
-  if (sum(hit) == 0) {
+  if (nrow(it) == 0) {
     cat("  VERDICT : ITEM_RE MATCHES NOTHING. Dominant prefixes on the listing:\n")
     pre <- sub("/[^/]+/?$", "/", sub("\\?.*$", "?", an$href))
     tab <- sort(table(pre), decreasing = TRUE)

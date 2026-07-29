@@ -65,8 +65,19 @@ insti_prose <- function(node, min_chars = 200) {
 )
 
 insti_item_body <- function(doc, url) {
+  # Snapshot the HTML *before* calling the stock extractor. xml2 documents are
+  # external pointers, and generic_item_body strips the tree in place: on a
+  # jec.senate.gov release page it took <article> from 1 to 0 and <p> from 49 to
+  # 0. Any fallback running afterwards therefore searched a gutted document --
+  # which silently made the named-container branch below dead code.
+  raw <- tryCatch(as.character(doc), error = function(e) NA_character_)
+
   b <- tryCatch(generic_item_body(doc, url)$body, error = function(e) NA_character_)
   if (length(b) && !is.na(b[1]) && nchar(b[1]) > 200) return(b[1])
+
+  if (is.na(raw)) return(NA_character_)
+  doc <- tryCatch(rvest::read_html(raw), error = function(e) NULL)
+  if (is.null(doc)) return(NA_character_)
 
   # 1. Named content containers, best by paragraph text.
   best <- NA_character_
