@@ -11,6 +11,13 @@ OUT  <- file.path(ROOT, "institutional", "data")
 RAW  <- file.path(OUT, "raw")
 
 files <- list.files(RAW, pattern = "\\.rds$", full.names = TRUE)
+# Feed files first: they carry explicit party attribution, so when a release
+# was also swept up by a Tier-1 host walk the feed row wins the URL dedupe.
+files <- files[order(!grepl("/feed_", files))]
+# Mirror hosts serve identical content under two domains; keep the canonical one.
+mirrors <- c("www.republicanleader.gov", "www.republicanwhip.gov", "www.src.senate.gov",
+             "republicans-cha.house.gov", "www.democraticleader.senate.gov",
+             "www.dpcc.senate.gov")
 message(length(files), " raw files")
 
 pieces <- list()
@@ -19,6 +26,7 @@ for (f in files) {
   if (is.list(x) && isTRUE(x$error)) { message("  [error host] ", x$host); next }
   if (!is.data.frame(x) || nrow(x) == 0) next
   df <- as.data.frame(x, stringsAsFactors = FALSE)
+  if (df$host[1] %in% mirrors) { message("  [mirror skipped] ", df$host[1]); next }
   # Tier-1 files carry party_site; Tier-2 files carry party_feed + listing.
   if (is.null(df$party_feed)) {
     df$party_feed <- switch(df$party_site[1],

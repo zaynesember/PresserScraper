@@ -1,19 +1,26 @@
 # 07_collect_feeds.R -- Tier-2 collection: walk the hand-configured feeds.
 #
-# Usage:  Rscript institutional/R/07_collect_feeds.R [--test]
+# Usage:  Rscript institutional/R/07_collect_feeds.R [--test] [--configs=<file.R>]
 #
 # --test walks each feed over the last 60 days without bodies and prints a
 # per-feed summary (fast sanity pass). The full run collects since 2000 with
 # bodies and writes institutional/data/raw/feed_<feed_id>.rds per feed.
 # Existing outputs are skipped, so the script is safely re-runnable.
+# --configs points at an alternative file defining feed_configs() (defaults to
+# 06_feed_configs.R).
 
 args <- commandArgs(trailingOnly = TRUE)
 TEST <- "--test" %in% args
+cfg_file <- sub("^--configs=", "", grep("^--configs=", args, value = TRUE))
 
 ROOT <- "/Users/zaynesember/GitRepos/pressR-sources"
 suppressMessages(devtools::load_all(ROOT, quiet = TRUE))
 source(file.path(ROOT, "institutional", "R", "lib_institutional.R"))
-source(file.path(ROOT, "institutional", "R", "06_feed_configs.R"))
+if (length(cfg_file) == 1) {
+  source(file.path(ROOT, "institutional", "R", cfg_file))
+} else {
+  source(file.path(ROOT, "institutional", "R", "06_feed_configs.R"))
+}
 
 OUT <- file.path(ROOT, "institutional", "data")
 RAW <- file.path(OUT, "raw")
