@@ -13,7 +13,7 @@ args <- commandArgs(trailingOnly = TRUE)
 worker_id <- as.integer(args[1])
 n_workers <- as.integer(args[2])
 
-ROOT <- "/Users/zaynesember/GitRepos/pressR-sources"
+ROOT <- "/Users/zaynesember/GitRepos/pressR"   # consolidated onto the `corpus` branch (was the pressR-sources worktree)
 suppressMessages(devtools::load_all(ROOT, quiet = TRUE))
 
 OUT <- file.path(ROOT, "institutional", "data")

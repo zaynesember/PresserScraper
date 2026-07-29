@@ -6,7 +6,7 @@
 #
 # Run:  Rscript institutional/R/09_assemble.R
 
-ROOT <- "/Users/zaynesember/GitRepos/pressR-sources"
+ROOT <- "/Users/zaynesember/GitRepos/pressR"   # consolidated onto the `corpus` branch (was the pressR-sources worktree)
 OUT  <- file.path(ROOT, "institutional", "data")
 RAW  <- file.path(OUT, "raw")
 

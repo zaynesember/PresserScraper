@@ -13,7 +13,7 @@ suppressPackageStartupMessages({
   library(httr2)
 })
 
-ROOT <- "/Users/zaynesember/GitRepos/pressR-sources"
+ROOT <- "/Users/zaynesember/GitRepos/pressR"   # consolidated onto the `corpus` branch (was the pressR-sources worktree)
 OUT  <- file.path(ROOT, "institutional", "data")
 dir.create(OUT, recursive = TRUE, showWarnings = FALSE)
 

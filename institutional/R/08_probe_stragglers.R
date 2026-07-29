@@ -1,7 +1,7 @@
 # 08_probe_stragglers.R -- targeted probes for the feeds still failing after
 # the first Tier-2 pass: what do their listing pages actually contain?
 
-ROOT <- "/Users/zaynesember/GitRepos/pressR-sources"
+ROOT <- "/Users/zaynesember/GitRepos/pressR"   # consolidated onto the `corpus` branch (was the pressR-sources worktree)
 suppressMessages(devtools::load_all(ROOT, quiet = TRUE))
 
 show_links <- function(url, pattern, n = 8) {

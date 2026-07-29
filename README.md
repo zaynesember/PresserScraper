@@ -125,9 +125,10 @@ maintainers with write access, `publish_archive()`). Both need the suggested
 ## A look at the data
 
 Archiving accumulates a tidy, one-row-per-release corpus across both chambers.
-The published snapshot — fetch it with `download_archive()` — currently holds:
+The published snapshot — fetch it with `download_archive()` — is summarised at the top of
+this README ([What's in the archive](#whats-in-the-archive), regenerated from the archive
+itself). Beyond the headline counts:
 
-- **436,201 releases** from 537 member offices, **2010 through mid-2026**
 - **~94%** carry full body text; issue tags wherever the CMS exposes them (~41% overall)
 - **House** — 282,687 · **Senate** — 153,514 · by party ≈ 262k D · 173k R · 0.7k I
 
@@ -166,15 +167,31 @@ Issue tags and state names are recorded as each chamber/office formats them, so
 synonyms ("Health Care" vs "Healthcare") and mixed state forms (House full names,
 Senate two-letter codes) appear — normalize before aggregating if needed.
 
-## NLP layer & dashboard
+## Research layer
 
-An exploratory analysis layer built on the archived corpus — near-duplicate
-"message family" detection, issue-tag completion, structural topic models, and
-sentiment, plus a Shiny dashboard — lives in [`nlp/`](nlp/). It also folds in two
-external congressional press-release datasets (Stout 114–117; Wang & Tucker
-109–115) for historical depth, taking the combined corpus to ~894k releases back
-to 2004. This is research code, kept separate from the installable package; see
-[`nlp/README.md`](nlp/README.md) for the pipeline and how to run it.
+The package is the scraper. Everything built on top of it — corpus construction and
+analysis — lives on the **`corpus`** branch, kept off `main` so the installable package
+stays clean. That layer currently holds **~900k releases back to 2004**:
+
+| source | releases |
+|---|---:|
+| `scraped` — this package, 2010–2026 | 436,201 |
+| `stout` — Stout, 114th–117th | 288,043 |
+| `wangtucker` — Wang & Tucker, 109th–115th | 169,366 |
+| `wayback` — former members recovered from the Internet Archive, 2005–2015 | 6,406 |
+
+- [`nlp/`](nlp/) — the pipeline that builds the combined corpus in DuckDB and derives
+  near-duplicate "message family" detection, issue-tag completion, structural topic models,
+  sentiment, directed-attack scores, partisan vocabulary, a member coordination network, and
+  readability — plus a Shiny dashboard over the results. See [`nlp/README.md`](nlp/README.md).
+- [`institutional/`](institutional/) — collection of press releases from **committees,
+  leadership offices, and caucuses** (majority *and* minority feeds), which member-office
+  scraping misses entirely.
+- `blog/` — a write-up of one finding from the corpus: the partisan "readability gap" in
+  congressional communication is sentence length, not vocabulary.
+
+This is research code with different standards from the package: it is exploratory, its
+inputs are large and mostly not redistributable, and it is not part of the installed library.
 
 ## Development
 

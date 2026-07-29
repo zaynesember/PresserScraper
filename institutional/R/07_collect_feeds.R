@@ -13,7 +13,7 @@ args <- commandArgs(trailingOnly = TRUE)
 TEST <- "--test" %in% args
 cfg_file <- sub("^--configs=", "", grep("^--configs=", args, value = TRUE))
 
-ROOT <- "/Users/zaynesember/GitRepos/pressR-sources"
+ROOT <- "/Users/zaynesember/GitRepos/pressR"   # consolidated onto the `corpus` branch (was the pressR-sources worktree)
 suppressMessages(devtools::load_all(ROOT, quiet = TRUE))
 source(file.path(ROOT, "institutional", "R", "lib_institutional.R"))
 if (length(cfg_file) == 1) {

@@ -11,7 +11,7 @@
 #
 # Run:  Rscript institutional/R/03_spot_test.R
 
-ROOT <- "/Users/zaynesember/GitRepos/pressR-sources"
+ROOT <- "/Users/zaynesember/GitRepos/pressR"   # consolidated onto the `corpus` branch (was the pressR-sources worktree)
 suppressMessages(devtools::load_all(ROOT, quiet = TRUE))
 
 OUT <- file.path(ROOT, "institutional", "data")
