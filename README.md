@@ -8,6 +8,14 @@ frame. Instead of guessing among dozens of CSS/XPath selectors per site, it
 **detects the content-management system** behind each site and routes to a
 dedicated extractor. Coverage is ~99% of the House and ~99% of the Senate.
 
+<!-- archive-stats:start -->
+## What's in the archive
+
+The published archive currently holds **436,201 press releases** from **535 members** (436 House, 99 Senate), spanning **January 2010 &ndash; June 2026** (as of 2026-07-28).
+
+<sub>Auto-generated &mdash; regenerate with `Rscript tools/update_readme_stats.R`</sub>
+<!-- archive-stats:end -->
+
 ## Why CMS detection
 
 Member sites cluster into a few vendor families. The House skews to the
