@@ -38,6 +38,9 @@ for (i in seq_len(nrow(cfg))) {
       items <- w$items
       if (!TEST && nrow(items) > 0) items <- insti_fetch_bodies(items)
       list(items = items, status = w$status)
+    } else if (f$engine == "sitemap") {
+      w <- walk_sitemap_feed(f$listing, f$item_re, FROM, TO, fetch_bodies = !TEST)
+      list(items = w$items, status = w$status)
     } else if (f$engine == "guid") {
       w <- walk_guid_feed(f$listing, FROM, TO)
       items <- w$items

@@ -41,6 +41,15 @@ insti_page_date <- function(doc, url) {
   d <- d[!is.na(d)]
   if (length(d) > 0) return(d[1])
 
+  # JSON-LD (e.g. Yoast) datePublished.
+  ld <- rvest::html_text(rvest::html_elements(doc, "script[type='application/ld+json']"))
+  m <- regmatches(ld, regexpr('"datePublished"\\s*:\\s*"([0-9]{4}-[0-9]{2}-[0-9]{2})', ld))
+  m <- m[!is.na(m) & nzchar(m)]
+  if (length(m) > 0) {
+    d <- suppressWarnings(as.Date(sub('.*"([0-9]{4}-[0-9]{2}-[0-9]{2})$', "\\1", m[1])))
+    if (!is.na(d)) return(d)
+  }
+
   m <- regmatches(url, regexec("/((?:19|20)[0-9]{2})/([0-9]{1,2})/", url))[[1]]
   if (length(m) == 3) {
     d <- suppressWarnings(as.Date(paste(m[2], m[3], "15", sep = "-")))
@@ -189,6 +198,60 @@ insti_fetch_bodies <- function(items) {
   items$body <- vapply(items$url, function(u) insti_item_fetch(u)$body,
                        character(1), USE.NAMES = FALSE)
   items
+}
+
+# ---- sitemap-engine feeds ---------------------------------------------------
+# For sites whose listings paginate client-side (JS load-more): enumerate item
+# URLs from the sitemap, then fetch each item page for date/title/body. The
+# sitemap may be a plain urlset or an index of child sitemaps.
+sitemap_urls <- function(url, depth = 0) {
+  if (depth > 2) return(character(0))
+  doc <- tryCatch(xml2::read_xml(paste0(url)), error = function(e) NULL)
+  if (is.null(doc)) {
+    resp <- get_html(url)  # some serve XML with an HTML content type
+    if (is.null(resp)) return(character(0))
+    doc <- tryCatch(xml2::read_xml(as.character(resp)), error = function(e) NULL)
+    if (is.null(doc)) return(character(0))
+  }
+  ns <- xml2::xml_ns_strip(doc)
+  locs <- xml2::xml_text(xml2::xml_find_all(doc, ".//loc"))
+  if (identical(xml2::xml_name(doc), "sitemapindex")) {
+    return(unlist(lapply(locs, sitemap_urls, depth = depth + 1)))
+  }
+  locs
+}
+
+insti_page_title <- function(doc) {
+  og <- rvest::html_attr(rvest::html_element(doc, "meta[property='og:title']"), "content")
+  if (!is.na(og) && nzchar(og)) return(trimws(sub("\\s*[-|–].{0,60}$", "", og)))
+  h1 <- rvest::html_text(rvest::html_element(doc, "h1"))
+  if (!is.na(h1) && nzchar(trimws(h1))) return(trimws(gsub("\\s+", " ", h1)))
+  trimws(rvest::html_text(rvest::html_element(doc, "title")))
+}
+
+walk_sitemap_feed <- function(sitemap, item_re, from, to, max_items = 5000,
+                              fetch_bodies = TRUE) {
+  urls <- unique(sitemap_urls(sitemap))
+  urls <- urls[grepl(item_re, urls, ignore.case = TRUE)]
+  if (length(urls) == 0) return(list(items = empty_items(), status = "no sitemap matches"))
+  if (length(urls) > max_items) urls <- urls[seq_len(max_items)]
+
+  recs <- purrr::map(urls, function(u) {
+    doc <- get_html(u)
+    if (is.null(doc)) return(NULL)
+    date <- insti_page_date(doc, u)
+    if (is.na(date) || date < from || date > to) return(NULL)
+    tibble::tibble(
+      date = date,
+      title = insti_page_title(doc),
+      url = u,
+      body = if (fetch_bodies) generic_item_body(doc, u)$body else NA_character_
+    )
+  })
+  recs <- purrr::compact(recs)
+  out <- if (length(recs) == 0) empty_items() else dplyr::bind_rows(recs)
+  list(items = out,
+       status = if (nrow(out) > 0) "ok" else "no items in window")
 }
 
 # ---- guid-engine feeds (CFM ?id=<GUID> sites, e.g. sbc.senate.gov) ----------

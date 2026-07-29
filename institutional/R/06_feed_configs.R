@@ -44,20 +44,20 @@ feed_configs <- function() {
          "https://www.commerce.senate.gov/press/democratic-news/",
          "commerce\\.senate\\.gov/press/dem/release/"),
 
-    # ---- Senate: HSGAC (current congress; prior congresses are separate paths)
-    list("www.hsgac.senate.gov", "Homeland Security and Governmental Affairs", "committee", "senate", "R", "insti",
-         "https://www.hsgac.senate.gov/media/majority-news/current-congress",
+    # ---- Senate: HSGAC (listings paginate client-side -> sitemap enumeration)
+    list("www.hsgac.senate.gov", "Homeland Security and Governmental Affairs", "committee", "senate", "R", "sitemap",
+         "https://www.hsgac.senate.gov/sitemap_index.xml",
          "hsgac\\.senate\\.gov/media/reps/"),
-    list("www.hsgac.senate.gov", "Homeland Security and Governmental Affairs", "committee", "senate", "D", "insti",
-         "https://www.hsgac.senate.gov/media/minority-news/current-congress",
+    list("www.hsgac.senate.gov", "Homeland Security and Governmental Affairs", "committee", "senate", "D", "sitemap",
+         "https://www.hsgac.senate.gov/sitemap_index.xml",
          "hsgac\\.senate\\.gov/media/dems/"),
 
-    # ---- Senate: HELP (chair vs ranking newsrooms)
-    list("www.help.senate.gov", "Health, Education, Labor, and Pensions", "committee", "senate", "R", "insti",
-         "https://www.help.senate.gov/chair/newsroom",
+    # ---- Senate: HELP (chair vs ranking; JS load-more -> sitemap enumeration)
+    list("www.help.senate.gov", "Health, Education, Labor, and Pensions", "committee", "senate", "R", "sitemap",
+         "https://www.help.senate.gov/sitemap.xml",
          "help\\.senate\\.gov/rep/newsroom/press/"),
-    list("www.help.senate.gov", "Health, Education, Labor, and Pensions", "committee", "senate", "D", "insti",
-         "https://www.help.senate.gov/ranking/newsroom",
+    list("www.help.senate.gov", "Health, Education, Labor, and Pensions", "committee", "senate", "D", "sitemap",
+         "https://www.help.senate.gov/sitemap.xml",
          "help\\.senate\\.gov/dem/newsroom/press/"),
 
     # ---- Senate: Judiciary
@@ -78,7 +78,7 @@ feed_configs <- function() {
 
     # ---- Senate: Small Business (CFM; relative pressreleases?ID=<GUID> items)
     list("www.sbc.senate.gov", "Small Business and Entrepreneurship", "committee", "senate", "R", "insti",
-         "https://www.sbc.senate.gov/public/index.cfm/republicanpressreleases-redirect",
+         "https://www.sbc.senate.gov/public/index.cfm/republicanpressreleases",
          "index\\.cfm/pressreleases\\?id="),
     list("www.sbc.senate.gov", "Small Business and Entrepreneurship", "committee", "senate", "D", "insti",
          "https://www.sbc.senate.gov/public/index.cfm/democraticpressreleases",
