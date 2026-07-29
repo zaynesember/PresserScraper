@@ -10,8 +10,11 @@ suppressMessages(devtools::load_all("/Users/zaynesember/GitRepos/pressR"))
 source("/Users/zaynesember/GitRepos/pressR/nlp/R/00_foundation.R")
 suppressMessages({ library(httr2); library(xml2); library(data.table) })
 t0 <- Sys.time()
-TARGETS <- read.csv("/Users/zaynesember/GitRepos/pressR/nlp/crosswalks/wayback_targets.csv",
-                    stringsAsFactors = FALSE)   # verified pre-2015 House retirees
+TARGETS <- read.csv(Sys.getenv("WAYBACK_TARGETS",   # roster override for expansion runs;
+                    "/Users/zaynesember/GitRepos/pressR/nlp/crosswalks/wayback_targets.csv"),
+                    stringsAsFactors = FALSE)   # default: verified pre-2015 House retirees
+# NOTE a full (non-VALID) run rewrites external/wayback/ from THIS roster's caches
+# only — an expansion roster must therefore include the original 16 members.
 ONLY <- Sys.getenv("WAYBACK_ONLY", ""); VALID <- nzchar(ONLY)   # subset run = validation (no write)
 if (VALID) TARGETS <- TARGETS[TARGETS$host %in% strsplit(ONLY, ",")[[1]], , drop = FALSE]
 CACHE   <- file.path(nlp_out_dir(), if (VALID) "wayback_cache_val" else "wayback_cache")
@@ -130,19 +133,47 @@ extract <- function(html, url, ts = "") {
 # archived era (a member's old site often differs from its later one), so we don't
 # key on it. Dedup collapses print/Itemid/encoding variants of the same release.
 cdx_articles <- function(host) {
+  # CDX returns rows in alphabetical urlkey order and caps each response at
+  # `limit`. A site with a big block of early-sorting junk (waxman's 7,784
+  # /htbin CGI urls) therefore consumes the whole budget and the real releases
+  # are NEVER RETURNED -- discovery silently sees nothing. So paginate with
+  # showResumeKey until the year-chunk is exhausted. Text output (not JSON):
+  # the resume key arrives as a trailing blank line + key, which simplifyVector
+  # cannot represent as a matrix.
+  LIMIT <- 8000L; MAXPAGE <- 12L
   out <- list()
   for (yr in seq(2005, 2015, by = 2)) {
-    u <- sprintf("http://web.archive.org/cdx/search/cdx?url=%s/*&output=json&collapse=urlkey&filter=statuscode:200&filter=mimetype:text/html&from=%d0101&to=%d1231&limit=8000",
-                 host, yr, yr + 1)
-    m <- tryCatch(resp_body_json(GET(u, 90), simplifyVector = TRUE), error = function(e) NULL)
-    if (!is.null(m) && !is.null(dim(m)) && nrow(m) > 1)
-      out[[length(out) + 1]] <- data.frame(ts = m[-1, 2], url = m[-1, 3], stringsAsFactors = FALSE)
-    Sys.sleep(max(THROTTLE, 5))   # CDX chokes on sub-second bursts; article fetches don't
+    rk <- NULL
+    for (pg in seq_len(MAXPAGE)) {
+      u <- sprintf(paste0("http://web.archive.org/cdx/search/cdx?url=%s/*&collapse=urlkey",
+                          "&filter=statuscode:200&filter=mimetype:text/html&fl=timestamp,original",
+                          "&from=%d0101&to=%d1231&limit=%d&showResumeKey=true%s"),
+                   host, yr, yr + 1, LIMIT,
+                   if (is.null(rk)) "" else paste0("&resumeKey=", utils::URLencode(rk, reserved = TRUE)))
+      txt <- tryCatch(resp_body_string(GET(u, 120)), error = function(e) "")
+      Sys.sleep(max(THROTTLE, 5))   # CDX chokes on sub-second bursts; article fetches don't
+      if (!nzchar(txt) || grepl("^\\s*<", txt)) break          # html error page = throttled
+      ln <- strsplit(txt, "\n", fixed = TRUE)[[1]]
+      ln <- ln[nzchar(trimws(ln))]
+      dat <- ln[grepl("^[0-9]{14}\\s", ln)]
+      # a trailing non-timestamp line is the resume key for the next page
+      tail_ln <- if (length(ln)) ln[length(ln)] else ""
+      rk <- if (nzchar(tail_ln) && !grepl("^[0-9]{14}\\s", tail_ln)) trimws(tail_ln) else NULL
+      if (length(dat)) {
+        sp <- regmatches(dat, regexpr("\\s+", dat), invert = TRUE)
+        out[[length(out) + 1]] <- data.frame(
+          ts  = vapply(sp, `[`, "", 1),
+          url = vapply(sp, `[`, "", 2), stringsAsFactors = FALSE)
+      }
+      if (is.null(rk)) break
+    }
   }
   d <- unique(do.call(rbind, out)); if (is.null(d) || !nrow(d)) return(d)
   p <- sub("^https?://[^/]+", "", d$url)
   asset  <- "[.](pdf|jpe?g|png|gif|css|js|xml|rss|zip|mp[34]|wmv|mov|ico|svg|woff2?)($|[?])"
-  printv <- "documentprint|[?&]print=|tmpl=component|/print/|format=print"
+  # index2.php is Joomla 1.0's template-less popup/print rendering of the SAME
+  # article as index.php (?pop=1) -> a duplicate, not a distinct release.
+  printv <- "documentprint|[?&]print=|tmpl=component|/print/|format=print|/index2[.]php|[?&]pop=1|do_pdf="
   pagin  <- "[?&]page=|/page/[0-9]|related-news|[?&]start=[0-9]|/feed|/rss"
   diridx <- paste0("/(issues?|press-releases?|news|newsroom|media-center|blog|category|categories|",
                    "topics?|tags?|gallery|photos?|videos?)/?$|/[0-9]{4}/[0-9]{2}/?$|/[0-9]{4}/?$")
@@ -159,13 +190,27 @@ cdx_articles <- function(host) {
             grepl("[?&]sectionid=[0-9.]+", p, ignore.case = TRUE) &
             grepl("[?&]itemid=[0-9]+", p, ignore.case = TRUE) &
             !grepl("option=com_", p, ignore.case = TRUE)
+  # Joomla 1.0 content articles (option=com_content&task=view&id=N) — the older
+  # sibling of the view=article form already handled below (murtha-era sites).
+  is_joomla1 <- grepl("option=com_content", p, ignore.case = TRUE) &
+                grepl("task=view", p, ignore.case = TRUE) &
+                grepl("[?&]id=[0-9]+", p, ignore.case = TRUE)
+  # Root-level Drupal slugs (/administration-limits-release-presidential-records):
+  # release titles slugify long, so require >=5 hyphen-separated words AND >=30
+  # chars. That keeps real releases while dropping nav/policy pages (/about-me,
+  # /accessibility, /acid-rain-solution-crisis). The date+body gate is the backstop.
+  is_rootslug <- grepl("^/[a-z0-9]+(-[a-z0-9]+){4,}$", p, ignore.case = TRUE) & nchar(p) >= 30
+  # Legacy House "apps/list" template: /apps/list/press/<district_code>/<file>.shtml
+  # (also /speech/, /release/). Widely used across House sites c. 2005-2011.
+  is_appslist <- grepl("^/apps/list/(press|speech|release)[a-z0-9_-]*/[^/]+/[^/]+[.](s?html?|asp)$",
+                       p, ignore.case = TRUE)
   pos <- grepl("documentid=[0-9]+", p, ignore.case = TRUE) |
          grepl("^/[0-9]{4}/[0-9]{2}/[a-z][^/]*[.](shtml|html?|cfm|aspx?)$", p, ignore.case = TRUE) |
          (grepl("view=article", p, ignore.case = TRUE) & grepl("[?&]id=[0-9]+", p, ignore.case = TRUE)) |
          grepl("/news/[a-z0-9][a-z0-9._%-]*-[a-z0-9._%-]{4,}$", p, ignore.case = TRUE) |
          grepl("/node/[0-9]+$", p, ignore.case = TRUE) |
          grepl("^/[0-9]{6}[a-z]?[.]s?html?$", p, ignore.case = TRUE) |            # root /MMDDYY[a].htm (cantor)
-         is_cfm |
+         is_cfm | is_joomla1 | is_rootslug | is_appslist |
          grepl("/pressreleases?/archive/[0-9]{4}/[a-z0-9][a-z0-9._-]*[.]s?html?$", p, ignore.case = TRUE)  # static yearly archive (matheson)
   neg <- grepl(asset, p, ignore.case = TRUE) | grepl(printv, p, ignore.case = TRUE) |
          grepl(pagin, p, ignore.case = TRUE) | grepl(diridx, p, ignore.case = TRUE) |
@@ -220,6 +265,18 @@ backfill_member <- function(M) {
     rows[[i]] <- data.table(date = ex$date, title = ex$title, body = ex$body, url = arts$url[i])
   }
   d <- rbindlist(rows)
+  # Service-window guard. Host inference is by SURNAME, so a seat inherited by a
+  # relative silently serves the successor's releases under the same host
+  # (bilirakis.house.gov -> Michael retired Jan 2007, son Gus 2007-; payne.house.gov
+  # -> Donald Sr. d.2012, Donald Jr. after). Without this, those get attributed to
+  # the departed member. Drop anything published past their exit (+90d for
+  # trailing captures). Rosters lacking house_end (the original 16) are unaffected.
+  if (nrow(d) && !is.null(M$house_end) && !is.na(M$house_end) && nzchar(as.character(M$house_end))) {
+    cutoff <- as.Date(M$house_end) + 90
+    n0 <- nrow(d); d <- d[date <= cutoff]
+    if (nrow(d) < n0) cat(sprintf("      (service-window: dropped %d of %d past %s)\n",
+                                  n0 - nrow(d), n0, format(cutoff)))
+  }
   if (nrow(d)) d[, `:=`(tags = NA_character_, cms = M$cms, name = M$name,
     state = M$state, district = as.character(M$district), party = M$party,
     committee = NA_character_, chamber = "house", source = "wayback")]
