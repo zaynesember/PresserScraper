@@ -49,6 +49,26 @@ analyses can exclude them with one predicate.
 - **Internet Archive throttles CDX hard** while its *content* endpoint stays fast — a throttled
   CDX response is indistinguishable from an empty archive, so never conclude "no data" during
   a throttle. Raw CDX results are cached in `wayback_cdx_cache/` so pattern iteration is free.
+- **Skip-if-exists treats a zero-row output as finished.** The institutional collectors write a
+  file even when a walk returns nothing, so a *failed* feed looks identical to a genuinely empty
+  one and will never be retried. Check for thin/empty outputs before assembling or folding in.
+- **Analysis scripts hard-code absolute paths** (`ROOT <- "/Users/zaynesember/GitRepos/pressR"`).
+  If a checkout ever moves, grep and fix them first — pointing at a missing directory makes a
+  skip-if-exists collector find no prior work and silently re-collect everything.
+
+## Long-running collection
+
+- **Institutional feeds:** `bash institutional/run_parallel.sh` runs N lanes (default 4,
+  `LANES=` to change) over `11_feed_configs2.R`. Lanes are partitioned **by host**, never by
+  feed, so no two processes hit one server; each keeps the normal throttle, so per-host
+  politeness is unchanged and only total throughput rises. Kill any running collector first
+  (`pkill -f 07_collect_feeds.R`) — concurrent writers would race on the same feed file.
+  Logs: `~/institutional_logs/lane<K>.log`.
+- **Wayback:** `Rscript nlp/run_wayback.R` (roster via `WAYBACK_TARGETS`, cap via
+  `WAYBACK_MAXART`). A full run **rewrites `external/wayback/` from the roster's caches only**,
+  so an expansion roster must still include the original 16 members or previously recovered
+  releases are dropped.
+- **Fold-in:** `bash nlp/run_foldin.sh` (hours; rebuilds DuckDB + every layer).
 
 ## Data that is NOT in git
 
