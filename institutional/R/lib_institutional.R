@@ -204,11 +204,27 @@ insti_feed_items <- function(doc, base, item_re, min_title = 15,
 #   query1 : base?param=N   with N = page number (page 1 is the bare base)
 #   wp     : base/page/N/
 #   none   : single page
+# Item URLs on a listing, ignoring dates and titles.
+#
+# Pager detection must NOT go through insti_feed_items: that function ends by
+# dropping rows whose date is unknown, and with date_from_item = FALSE (which
+# detection uses, to avoid fetching every item page) a listing carrying no
+# per-item dates yields nothing for *every* page. All candidates then look
+# identical, detection returns "none", and walk_feed collects page 0 only.
+# energy.senate.gov hides 195 pages behind exactly such a listing and collected
+# 15 rows. Comparing raw item URLs is all detection ever needed.
+insti_item_urls <- function(doc, base, item_re) {
+  href <- rvest::html_attr(rvest::html_elements(doc, "a[href]"), "href")
+  if (!length(href)) return(character(0))
+  u <- abs_urls(href, base)
+  unique(u[!is.na(u) & grepl(item_re, u, ignore.case = TRUE)])
+}
+
 insti_detect_pager <- function(base, page0_doc, item_re) {
-  urls0 <- insti_feed_items(page0_doc, base, item_re, date_from_item = FALSE)$url
+  urls0 <- insti_item_urls(page0_doc, base, item_re)
   differs <- function(doc) {
     if (is.null(doc)) return(FALSE)
-    u <- insti_feed_items(doc, base, item_re, date_from_item = FALSE)$url
+    u <- insti_item_urls(doc, base, item_re)
     length(u) > 0 && length(setdiff(u, urls0)) > 0
   }
 

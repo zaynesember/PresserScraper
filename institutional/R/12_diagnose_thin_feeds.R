@@ -210,7 +210,21 @@ for (t in targets) {
   it <- insti_feed_items(doc, f$listing, f$item_re, date_from_item = FALSE)
   cat("  walker items on page 0: ", nrow(it), "\n", sep = "")
 
-  if (nrow(it) == 0) {
+  # Two separate failures look alike here, so use both signals. No matching
+  # anchors AND no walker items means item_re really is wrong. Matching anchors
+  # but no walker items means the listing carries no per-item dates: this probe
+  # runs with date_from_item = FALSE for speed, so those rows are dropped, while
+  # the real walk fetches each item page for its date and keeps them. Reporting
+  # that as "item_re matches nothing" sent energy.senate.gov down the wrong path.
+  if (sum(hit) > 0 && nrow(it) == 0) {
+    cat("  NOTE    : anchors match but this fast probe drops them -- the listing\n",
+        "            carries no per-item dates, so the real walk fetches item pages.\n",
+        "            Re-probing page 0 with item-page dates (slower):\n", sep = "")
+    it <- insti_feed_items(doc, f$listing, f$item_re, date_from_item = TRUE)
+    cat("  walker items with item-page dates: ", nrow(it), "\n", sep = "")
+  }
+
+  if (nrow(it) == 0 && sum(hit) == 0) {
     cat("  VERDICT : ITEM_RE MATCHES NOTHING. Dominant prefixes on the listing:\n")
     pre <- sub("/[^/]+/?$", "/", sub("\\?.*$", "?", an$href))
     tab <- sort(table(pre), decreasing = TRUE)
