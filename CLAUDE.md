@@ -52,6 +52,32 @@ analyses can exclude them with one predicate.
 - **Skip-if-exists treats a zero-row output as finished.** The institutional collectors write a
   file even when a walk returns nothing, so a *failed* feed looks identical to a genuinely empty
   one and will never be retried. Check for thin/empty outputs before assembling or folding in.
+  `institutional/R/12_diagnose_thin_feeds.R` re-probes a feed and says which stage died
+  (listing dead / item_re matches nothing / pagination never engaged / body extraction fails).
+- **`as.Date()` on a non-ISO string THROWS**, and `suppressWarnings()` does not catch an error.
+  `<time datetime="Jul 27, 2026">` (ethics.house.gov) killed a whole feed this way and it
+  collected as 0 rows. Parse page dates with `first_parseable_date()`, never
+  `as.Date(substr(x, 1, 10))` — truncating to 10 chars also mangles non-ISO values.
+- **A thin haul is usually pagination, not a quiet committee.** `insti_detect_pager()` probes the
+  live site, so it can return `none` for a listing that paginated fine an hour earlier; the walk
+  then silently returns page 0 only. Because of that a re-collect can come back *smaller* than
+  what it replaces — `14_recollect_feed.R` refuses that regression unless `--force`.
+- **Elementor sites have no `<article>`/`<main>`/`.content`,** so the stock body extractor
+  returns NA for every item — that alone was ~9.4k body-less rows (hsgac, commerce, drugcaucus).
+  `insti_item_body()` falls back to the densest `<p>` block, but *only* on Elementor pages and
+  only past a link-ratio and mean-paragraph-length gate: the same heuristic ungated returned the
+  identical 2,085-char sidebar ("Chairman | Vice Chairman | S.4615 …") for every
+  intelligence.senate.gov release. Verify a recovered body by reading it, not by its length.
+- **Some committees publish releases as PDFs** (ethics.senate.gov: `content-type:
+  application/pdf`). `fetch_html()` correctly returns NULL, so those rows are legitimately
+  body-less — not a bug to chase.
+- **One release can be listed under several party-branded feeds.** Aging and Small Business list
+  bipartisan releases under majority *and* minority *and* joint at one permalink. Deduping on
+  URL alone kept whichever file sorted first, which stamped all 105 such rows `D` purely because
+  `#d#` precedes `#np#`/`#r#`. `09_assemble.R` now resolves conflicting branding to NP first.
+- **macOS ships bash 3.2** — no negative array subscripts. `${pids[-1]}` under `set -u` is a
+  fatal error, and it once left `run_parallel.sh` having launched only lane 1 while reporting
+  nothing was wrong. Check lane count with `pgrep -f 07_collect_feeds.R`, not the runner's exit.
 - **Analysis scripts hard-code absolute paths** (`ROOT <- "/Users/zaynesember/GitRepos/pressR"`).
   If a checkout ever moves, grep and fix them first — pointing at a missing directory makes a
   skip-if-exists collector find no prior work and silently re-collect everything.
@@ -64,6 +90,16 @@ analyses can exclude them with one predicate.
   politeness is unchanged and only total throughput rises. Kill any running collector first
   (`pkill -f 07_collect_feeds.R`) — concurrent writers would race on the same feed file.
   Logs: `~/institutional_logs/lane<K>.log`.
+- **Repairing feeds while the lanes run:** never start a second `07_collect_feeds.R` over the
+  same config — it would pick up feeds the lanes have not finished (no output yet ⇒ no skip) and
+  two processes would hit one host. Use `14_recollect_feed.R <feed_id>` (walks only the feeds you
+  name, moves the old output to `data/raw_stale/`) and `13_backfill_bodies.R <file.rds>` (fills
+  missing bodies in place, no re-walk; refuses any host in the active config). One host per
+  process.
+- **Party attribution:** `institutional/R/lib_party.R` `chamber_majority(date, chamber)` resolves
+  majority-branded (`MAJ`) feeds — 44% of institutional rows — from who held the chamber **on the
+  release date**. `09_assemble.R` writes both `party_feed` (raw branding, audit trail) and
+  `party` (resolved). Joint-chamber rows stay NA by design.
 - **Wayback:** `Rscript nlp/run_wayback.R` (roster via `WAYBACK_TARGETS`, cap via
   `WAYBACK_MAXART`). A full run **rewrites `external/wayback/` from the roster's caches only**,
   so an expansion roster must still include the original 16 members or previously recovered
