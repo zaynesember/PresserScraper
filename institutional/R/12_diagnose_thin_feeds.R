@@ -34,6 +34,56 @@ args <- commandArgs(trailingOnly = TRUE)
 # next round of thin feeds is found by one command instead of by noticing a log
 # line. Flags are heuristics, not verdicts -- diagnose a flagged feed before
 # changing its config.
+# --audit-pagers: find every feed whose collected haul looks like a single
+# listing page while its listing actually paginates.
+#
+# Needed because insti_detect_pager used to return "none" for any listing
+# without per-item dates, which capped those walks at page 0. Every feed
+# collected before that fix is suspect, and a capped feed is indistinguishable
+# from a small one by row count alone -- so re-probe the live listing with the
+# fixed detector and compare against what was collected.
+#
+# Network-heavy (one or more fetches per feed). Run it when the lanes are DONE:
+# it does not coordinate with them, so it would otherwise double up on a host.
+if ("--audit-pagers" %in% args) {
+  RAW <- file.path(ROOT, "institutional", "data", "raw")
+  rows <- list()
+  for (i in seq_len(nrow(cfg))) {
+    f <- cfg[i, ]
+    if (!identical(f$engine, "insti")) next          # sitemap/guid do not paginate
+    dest <- file.path(RAW, paste0("feed_", gsub("[^a-z0-9#._-]", "_", f$feed_id), ".rds"))
+    if (!file.exists(dest)) next
+    x <- tryCatch(readRDS(dest), error = function(e) NULL)
+    if (!is.data.frame(x)) next
+    doc <- get_html(f$listing)
+    if (is.null(doc)) {
+      rows[[length(rows) + 1]] <- data.frame(feed = f$feed_id, rows = nrow(x),
+        page0 = NA_integer_, pager = "listing dead", verdict = "CHECK",
+        stringsAsFactors = FALSE)
+      next
+    }
+    n0 <- length(insti_item_urls(doc, f$listing, f$item_re))
+    pg <- insti_detect_pager(f$listing, doc, f$item_re)
+    # Capped: a pager exists, yet the haul is within one page of page-0 size.
+    capped <- pg$mode != "none" && n0 > 0 && nrow(x) <= n0 * 2
+    rows[[length(rows) + 1]] <- data.frame(feed = f$feed_id, rows = nrow(x),
+      page0 = n0, pager = paste(pg$mode, pg$param %||% ""),
+      verdict = if (capped) "CAPPED -- RECOLLECT" else "ok",
+      stringsAsFactors = FALSE)
+  }
+  d <- do.call(rbind, rows)
+  d <- d[order(d$verdict != "ok", d$rows), ]
+  cat(sprintf("%-46s %6s %6s %-22s %s\n", "feed", "rows", "page0", "pager", "verdict"))
+  for (i in seq_len(nrow(d))) cat(sprintf("%-46s %6d %6s %-22s %s\n",
+    substr(d$feed[i], 1, 46), d$rows[i], ifelse(is.na(d$page0[i]), "-", d$page0[i]),
+    d$pager[i], d$verdict[i]))
+  bad <- d$feed[d$verdict != "ok"]
+  cat("\n", length(bad), " feed(s) need re-collection\n", sep = "")
+  if (length(bad)) cat("Rscript institutional/R/14_recollect_feed.R ",
+                       paste0('"', bad, '"', collapse = " "), "\n", sep = "")
+  quit(save = "no")
+}
+
 if ("--sweep" %in% args) {
   RAW <- file.path(ROOT, "institutional", "data", "raw")
   files <- list.files(RAW, pattern = "\\.rds$", full.names = TRUE)
