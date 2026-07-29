@@ -180,6 +180,150 @@ if (has_table("readability")) {
   readability <- list(by_party_year = rd_party, by_issue = rd_issue, by_source = rd_source)
 }
 
+# ---- POWER & STATUS: negativity flips + issue ownership ----------------------
+# Two findings sharing one thesis: things that look like fixed party traits
+# (meanness, issue ownership) are really status/context variables that track who
+# holds power. Built from attack_scores + entity_stance (Finding A) and
+# issue_labels (Finding B).
+power <- NULL
+if (has_table("attack_scores") && has_table("issue_labels")) {
+
+  ## FINDING A -- "Negativity is opposition behavior; it flips with the WH" ------
+  # A release "names + directs sentiment at an out-party figure" exactly when it
+  # has an out_attack score (== n_out > 0). Share = such releases / all party-coded
+  # releases with attack scores, by party x year. The D and R lines cross at each
+  # presidential transition.
+  attack_outparty_year <- q("
+    SELECT r.year, r.party,
+           ROUND(AVG((a.out_attack IS NOT NULL)::INT), 4) share_outparty,
+           SUM((a.out_attack IS NOT NULL)::INT) n_outparty,
+           COUNT(*) n_scored
+    FROM attack_scores a JOIN releases r USING(url)
+    WHERE r.party IN ('D','R') AND r.year BETWEEN 2010 AND 2025
+    GROUP BY 1, 2 ORDER BY 1, 2")
+
+  # Controlled stat: out-party-targeting releases are markedly more net-negative
+  # (document sentiment < 0) than in-party-targeting releases, while the RAW
+  # D-vs-R net-negativity gap is tiny -> opposition STATUS, not party, drives it.
+  attack_controlled <- if (has_table("sentiment")) q("
+    SELECT
+      ROUND(AVG(CASE WHEN a.out_attack IS NOT NULL THEN (s.sentiment < 0)::INT END), 4) outparty_netneg,
+      ROUND(AVG(CASE WHEN a.in_support IS NOT NULL AND a.out_attack IS NULL
+                     THEN (s.sentiment < 0)::INT END), 4) inparty_netneg,
+      ROUND(AVG(CASE WHEN r.party = 'D' AND a.out_attack IS NOT NULL THEN (a.out_attack < 0)::INT END), 4) d_netneg_out,
+      ROUND(AVG(CASE WHEN r.party = 'R' AND a.out_attack IS NOT NULL THEN (a.out_attack < 0)::INT END), 4) r_netneg_out
+    FROM attack_scores a JOIN releases r USING(url) JOIN sentiment s USING(url)
+    WHERE r.party IN ('D','R')") else NULL
+
+  # Polarized perception: per-entity mean directed sentiment by SPEAKER party.
+  # The same figure is praised by co-partisans and attacked by rivals.
+  entity_stance_party <- q("
+    SELECT entity_id, entity_type, sp_party,
+           ROUND(SUM(mean_sentiment * n) / SUM(n), 4) mean_sent, SUM(n) n
+    FROM entity_stance WHERE sp_party IN ('D','R')
+    GROUP BY 1, 2, 3 HAVING SUM(n) >= 200 ORDER BY entity_id, sp_party")
+
+  # Most-attacked entities overall (lowest mean directed sentiment).
+  entity_most_attacked <- q("
+    SELECT entity_id, entity_type,
+           ROUND(SUM(mean_sentiment * n) / SUM(n), 4) mean_sent, SUM(n) n
+    FROM entity_stance GROUP BY 1, 2 HAVING SUM(n) >= 500
+    ORDER BY mean_sent ASC LIMIT 15")
+
+  ## FINDING B -- "Who owns each issue" + ownership flips with power ------------
+  # Attention rate = share of a party's labeled releases that touch an issue
+  # (de-multilabel via unnest). Ownership = log2(R rate / D rate), normalized for
+  # each party's total output. Ranking is robust to label_source (MNAR).
+  lab_expr <- "COALESCE(il.office_issues, il.predicted_issues)"
+  own_long <- q(sprintf("
+    SELECT r.party, trim(iss) issue
+    FROM releases r JOIN issue_labels il USING(url), %s AS u(iss)
+    WHERE r.usable AND r.party IN ('D','R') AND %s IS NOT NULL AND trim(iss) <> ''",
+    splitfn(lab_expr), lab_expr))
+  own_denom <- q(sprintf("
+    SELECT r.party, COUNT(*) n_party FROM releases r JOIN issue_labels il USING(url)
+    WHERE r.usable AND r.party IN ('D','R') AND %s IS NOT NULL GROUP BY 1", lab_expr))
+  issue_ownership <- own_long |> count(party, issue, name = "n_issue") |>
+    left_join(own_denom, by = "party") |> mutate(rate = n_issue / n_party) |>
+    select(party, issue, rate, n_issue) |>
+    tidyr::pivot_wider(names_from = party, values_from = c(rate, n_issue)) |>
+    filter(!is.na(rate_D), !is.na(rate_R)) |>
+    mutate(log2_RD = log2(rate_R / rate_D), n_total = n_issue_D + n_issue_R) |>
+    filter(n_total >= 300) |>
+    transmute(issue, log2_RD = round(log2_RD, 3),
+              ratio = round(rate_R / rate_D, 2), n_total) |>
+    arrange(log2_RD)
+
+  # MNAR robustness check: ownership on office-tagged labels only. The RANKING is
+  # what's reported; office-only is a sanity comparison (Spearman shown in UI).
+  oo_long <- q("
+    SELECT r.party, trim(iss) issue
+    FROM releases r JOIN issue_labels il USING(url),
+         unnest(string_split(il.office_issues, ';')) AS u(iss)
+    WHERE r.usable AND r.party IN ('D','R') AND il.office_issues IS NOT NULL AND trim(iss) <> ''")
+  oo_denom <- q("
+    SELECT r.party, COUNT(*) n_party FROM releases r JOIN issue_labels il USING(url)
+    WHERE r.usable AND r.party IN ('D','R') AND il.office_issues IS NOT NULL GROUP BY 1")
+  issue_ownership_office <- oo_long |> count(party, issue, name = "n_issue") |>
+    left_join(oo_denom, by = "party") |> mutate(rate = n_issue / n_party) |>
+    select(party, issue, rate, n_issue) |>
+    tidyr::pivot_wider(names_from = party, values_from = c(rate, n_issue)) |>
+    filter(!is.na(rate_D), !is.na(rate_R), n_issue_D + n_issue_R >= 300) |>
+    transmute(issue, log2_RD_office = round(log2(rate_R / rate_D), 3))
+  own_corr <- issue_ownership |> inner_join(issue_ownership_office, by = "issue")
+  ownership_spearman <- round(cor(own_corr$log2_RD, own_corr$log2_RD_office,
+                                  method = "spearman"), 3)
+
+  # Dominant-issue (top_issue) attention over time -- one issue per release, so
+  # shares are directly comparable. Economy & Jobs falls; Health Care spikes 2020.
+  top_den <- q("
+    SELECT r.year, COUNT(*) n FROM releases r JOIN issue_labels il USING(url)
+    WHERE r.usable AND r.party IN ('D','R') AND r.year BETWEEN 2010 AND 2025
+      AND il.top_issue IS NOT NULL GROUP BY 1")
+  issue_attention_year <- q("
+    SELECT r.year, il.top_issue issue, COUNT(*) n
+    FROM releases r JOIN issue_labels il USING(url)
+    WHERE r.usable AND r.party IN ('D','R') AND r.year BETWEEN 2010 AND 2025
+      AND il.top_issue IS NOT NULL GROUP BY 1, 2") |>
+    left_join(top_den, by = "year", suffix = c("", "_den")) |>
+    mutate(share = round(n / n_den, 4)) |>
+    transmute(year, issue, share, n)
+
+  # Ownership flips with power: R-share of an issue's combined attention by year
+  # (>0.5 = R-owned that year). Immigration flips D-leaning -> R-owned.
+  oy_long <- q(sprintf("
+    SELECT r.year, r.party, trim(iss) issue
+    FROM releases r JOIN issue_labels il USING(url), %s AS u(iss)
+    WHERE r.usable AND r.party IN ('D','R') AND r.year BETWEEN 2010 AND 2025
+      AND %s IS NOT NULL AND trim(iss) <> ''", splitfn(lab_expr), lab_expr))
+  oy_denom <- q(sprintf("
+    SELECT r.year, r.party, COUNT(*) n_party FROM releases r JOIN issue_labels il USING(url)
+    WHERE r.usable AND r.party IN ('D','R') AND r.year BETWEEN 2010 AND 2025
+      AND %s IS NOT NULL GROUP BY 1, 2", lab_expr))
+  issue_ownership_year <- oy_long |> count(year, party, issue, name = "n_issue") |>
+    left_join(oy_denom, by = c("year", "party")) |> mutate(rate = n_issue / n_party) |>
+    select(year, party, issue, rate, n_issue) |>
+    tidyr::pivot_wider(names_from = party, values_from = c(rate, n_issue)) |>
+    filter(!is.na(rate_D), !is.na(rate_R), n_issue_D + n_issue_R >= 200) |>
+    transmute(year, issue,
+              r_share = round(rate_R / (rate_R + rate_D), 4),
+              log2_RD = round(log2(rate_R / rate_D), 4),
+              n = n_issue_D + n_issue_R)
+
+  power <- list(
+    attack_outparty_year = attack_outparty_year,
+    attack_controlled    = attack_controlled,
+    entity_stance_party  = entity_stance_party,
+    entity_most_attacked = entity_most_attacked,
+    issue_ownership      = issue_ownership,
+    ownership_spearman   = ownership_spearman,
+    issue_attention_year = issue_attention_year,
+    issue_ownership_year = issue_ownership_year,
+    flip_issues = sort(unique(issue_ownership_year$issue)),
+    attn_issues = issue_attention_year |> group_by(issue) |>
+      summarise(tot = sum(n), .groups = "drop") |> arrange(desc(tot)) |> pull(issue))
+}
+
 dbDisconnect(con, shutdown = TRUE)
 
 dash <- list(
@@ -192,6 +336,7 @@ dash <- list(
   sentiment_sources = sentiment_sources, sentiment_divergence = sentiment_divergence,
   partisan_terms = partisan_terms, partisan_scopes = partisan_scopes,
   network = network, attack = attack, readability = readability,
+  power = power,
   built_at = as.character(Sys.time())
 )
 dir.create(file.path(NLP, "dashboard"), showWarnings = FALSE)
@@ -221,3 +366,8 @@ cat(sprintf("  attack: %s\n",
 cat(sprintf("  readability: %s\n",
   if (is.null(readability)) "ABSENT (run nlp/run_readability.R + persist first)" else
     sprintf("%d party-year rows, %d issues", nrow(readability$by_party_year), nrow(readability$by_issue))))
+cat(sprintf("  power: %s\n",
+  if (is.null(power)) "ABSENT (needs attack_scores + issue_labels)" else
+    sprintf("%d attack party-year rows, %d ranked issues (office-only Spearman %.3f), %d attention-trend rows",
+            nrow(power$attack_outparty_year), nrow(power$issue_ownership),
+            power$ownership_spearman, nrow(power$issue_attention_year))))

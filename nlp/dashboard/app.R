@@ -16,6 +16,23 @@ PARTY_COL <- c(D = "#2166ac", R = "#b2182b")
 SOURCE_LABEL <- c(scraped = "Scraped (pressR)", stout = "Stout 114-117",
                   wangtucker = "Wang & Tucker 109-115")
 
+# Presidential terms (for background shading on the negativity-flip chart).
+# xmin/xmax bracket each term in continuous year coordinates.
+PREZ_TERMS <- data.frame(
+  president = c("Obama", "Trump", "Biden", "Trump"),
+  party     = c("D", "R", "D", "R"),
+  xmin      = c(2009.5, 2016.5, 2020.5, 2024.5),
+  xmax      = c(2016.5, 2020.5, 2024.5, 2025.5),
+  stringsAsFactors = FALSE)
+# readable labels for the entity_stance entity ids
+ENT_LABEL <- c(trump = "Trump (pres)", biden = "Biden (pres)", obama = "Obama (pres)",
+  bush = "Bush (pres)", democrats = "Democrats (party)", republicans = "Republicans (party)",
+  pelosi = "Pelosi (leader)", schumer = "Schumer (leader)", mcconnell = "McConnell (leader)",
+  mccarthy = "McCarthy (leader)", ice = "ICE (agency)", fbi = "FBI (agency)",
+  cdc = "CDC (agency)", irs = "IRS (agency)", cfpb = "CFPB (agency)",
+  iran = "Iran", russia = "Russia", china = "China")
+ent_lab <- function(x) ifelse(x %in% names(ENT_LABEL), ENT_LABEL[x], tools::toTitleCase(x))
+
 # short-lived read_only query (never holds the connection open)
 qd <- function(sql, params = NULL) {
   con <- dbConnect(duckdb::duckdb(), DB, read_only = TRUE)
@@ -173,6 +190,38 @@ ui <- page_navbar(
         textOutput("at_caption")
       ),
       uiOutput("at_body")
+    )
+  ),
+  nav_panel(
+    "Power & Status", icon = icon("chess"),
+    layout_sidebar(
+      fillable = FALSE,
+      sidebar = sidebar(
+        width = 330,
+        radioButtons("ps_view", "Finding",
+          c("Negativity flips with the White House" = "neg",
+            "Who owns each issue (& flips)"          = "own")),
+        conditionalPanel("input.ps_view == 'neg'",
+          radioButtons("ps_neg_sub", "Panel",
+            c("Out-party attack by year" = "share",
+              "Polarized perception (by entity)" = "stance",
+              "Most-attacked entities" = "attacked"))),
+        conditionalPanel("input.ps_view == 'own'",
+          radioButtons("ps_own_sub", "Panel",
+            c("Issue ownership (overall)" = "rank",
+              "Attention over time" = "attn",
+              "Ownership flips over time" = "flip")),
+          conditionalPanel("input.ps_own_sub == 'attn'",
+            selectizeInput("ps_attn_iss", "Issues", choices = NULL, multiple = TRUE)),
+          conditionalPanel("input.ps_own_sub == 'flip'",
+            selectInput("ps_flip_iss", "Issue", choices = NULL))),
+        helpText(tags$b("One thesis:"), " a lot of what looks like a fixed party ",
+          "trait — meanness, issue ownership — is really a ", tags$b("status / context"),
+          " variable: it tracks who holds power. Negativity is opposition behavior; ",
+          "issue ownership shifts with the White House."),
+        textOutput("ps_caption")
+      ),
+      uiOutput("ps_body")
     )
   ),
   nav_panel(
@@ -621,6 +670,189 @@ server <- function(input, output, session) {
       geom_line(linewidth = 0.9) + geom_point(size = 1) +
       scale_color_manual(values = PARTY_COL) +
       labs(x = NULL, y = "mean sentiment toward entity", color = "speaker") + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
+
+  ## Power & Status (negativity flips + issue ownership) ----------------------
+  if (!is.null(dash$power)) {
+    updateSelectizeInput(session, "ps_attn_iss", choices = dash$power$attn_issues,
+      selected = c("Economy & Jobs", "Health Care", "Immigration & Border",
+                   "Defense & National Security"))
+    fl <- dash$power$flip_issues
+    updateSelectInput(session, "ps_flip_iss", choices = fl,
+      selected = if ("Immigration & Border" %in% fl) "Immigration & Border" else fl[1])
+  }
+
+  output$ps_caption <- renderText({
+    req(dash$power)
+    if (input$ps_view == "neg") {
+      c <- dash$power$attack_controlled
+      if (is.null(c)) return("")
+      sprintf("Controlled: out-party-targeting releases %.1f%% net-negative vs in-party %.1f%% — yet the raw D-vs-R net-negativity gap is tiny (%.1f%% vs %.1f%%). Opposition status, not party, drives negativity.",
+              100 * c$outparty_netneg, 100 * c$inparty_netneg,
+              100 * c$d_netneg_out, 100 * c$r_netneg_out)
+    } else {
+      sprintf("Ownership ranking is robust to label source (MNAR): all-labels vs office-tagged-only Spearman rho = %.2f.",
+              dash$power$ownership_spearman)
+    }
+  })
+
+  output$ps_body <- renderUI({
+    if (is.null(dash$power))
+      return(div(class = "alert alert-warning",
+        "Power & Status layer not in this build (needs attack_scores + issue_labels; re-run prep_dashboard.R)."))
+    if (input$ps_view == "neg") {
+      if (input$ps_neg_sub == "share")
+        card(card_header("Attacking the out-party is opposition behavior — and it flips with the White House"),
+             plotlyOutput("ps_neg_share", height = 540),
+             div(class = "small text-muted px-2 pb-2",
+               "Share of each party's scored releases that name and direct sentiment at an out-party ",
+               "figure (president, party, leaders), by year. Shaded bands = presidential term. ",
+               "The Democratic and Republican lines cross at each transition."))
+      else if (input$ps_neg_sub == "stance")
+        card(card_header("The same politician is praised by allies and attacked by rivals"),
+             plotlyOutput("ps_neg_stance", height = 560),
+             div(class = "small text-muted px-2 pb-2",
+               "Directed sentiment toward each named figure, split by the SPEAKER's party ",
+               "(>= 200 targeted mentions). Negative = attacking. Presidents and the parties ",
+               "themselves split hard by who's speaking — polarized perception, not a fixed valence."))
+      else
+        card(card_header("Most-attacked entities overall (lowest mean directed sentiment)"),
+             plotlyOutput("ps_neg_attacked", height = 520),
+             div(class = "small text-muted px-2 pb-2",
+               "Pooled across both parties. Agencies (ICE), foreign adversaries (Iran, Russia), ",
+               "and the sitting out-party president sit at the hostile end."))
+    } else {
+      if (input$ps_own_sub == "rank")
+        card(card_header("Who owns each issue? Partisan skew in press-release attention"),
+             plotlyOutput("ps_own_rank", height = 720),
+             div(class = "small text-muted px-2 pb-2",
+               tags$b("log2 ratio"), " of Republican-vs-Democratic attention rate per issue, ",
+               "normalized for each party's total output. Right = Republican-owned, left = ",
+               "Democrat-owned. ", tags$b("Caveat:"), " issue tags are missing-not-at-random by ",
+               "office (label_source office vs predicted), but the ownership RANKING is robust ",
+               "(office-only Spearman shown in the sidebar)."))
+      else if (input$ps_own_sub == "attn")
+        card(card_header("What Congress talks about over time (dominant-issue share)"),
+             plotlyOutput("ps_own_attn", height = 540),
+             div(class = "small text-muted px-2 pb-2",
+               "Share of releases whose dominant (top) issue is each line, 2010-2025. ",
+               "Economy & Jobs falls from ~28% (2010) to ~20% (2025); Health Care spikes in 2020 (COVID)."))
+      else
+        tagList(
+          card(card_header(textOutput("ps_flip_title")),
+               plotlyOutput("ps_own_flip", height = 460),
+               div(class = "small text-muted px-2 pb-2",
+                 "Republican share of the issue's combined D+R attention, by year. Above 0.5 = ",
+                 "Republican-owned that year; below = Democrat-owned. Immigration & Border flips ",
+                 "from Democrat-leaning (2017-2019) to Republican-owned (~0.58 in 2022, ~0.66 in 2024).")))
+    }
+  })
+
+  output$ps_neg_share <- renderPlotly({
+    req(dash$power)
+    d <- dash$power$attack_outparty_year
+    d$party_lab <- ifelse(d$party == "D", "Democrats", "Republicans")
+    bands <- PREZ_TERMS[PREZ_TERMS$xmax <= max(d$year) + 0.5, ]
+    p <- ggplot(d, aes(year, share_outparty)) +
+      geom_rect(data = bands, inherit.aes = FALSE,
+        aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = party),
+        alpha = 0.12) +
+      geom_line(aes(color = party, group = party,
+        text = sprintf("%s %d: %.0f%% (%s of %s scored releases)", party_lab, year,
+                       100 * share_outparty, format(n_outparty, big.mark = ","),
+                       format(n_scored, big.mark = ","))), linewidth = 1) +
+      geom_point(aes(color = party), size = 1.6) +
+      scale_color_manual(values = PARTY_COL, labels = c(D = "Democrats", R = "Republicans"), name = NULL) +
+      scale_fill_manual(values = PARTY_COL, guide = "none") +
+      scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+      scale_x_continuous(breaks = seq(2010, 2024, 2)) +
+      labs(x = NULL, y = "releases naming an out-party target") + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
+
+  output$ps_neg_stance <- renderPlotly({
+    req(dash$power)
+    d <- dash$power$entity_stance_party
+    # keep entities with both parties present; order by within-party spread
+    both <- d |> group_by(entity_id) |> filter(n_distinct(sp_party) == 2) |> ungroup()
+    spread <- both |> group_by(entity_id) |>
+      summarise(rng = max(mean_sent) - min(mean_sent), .groups = "drop") |>
+      slice_max(rng, n = 14)
+    both <- both |> filter(entity_id %in% spread$entity_id)
+    both$lab <- factor(ent_lab(both$entity_id),
+      levels = ent_lab(spread$entity_id[order(spread$rng)]))
+    p <- ggplot(both, aes(mean_sent, lab, color = sp_party, group = lab,
+        text = sprintf("%s — %s speakers: %.3f (n=%s)", ent_lab(entity_id), sp_party,
+                       mean_sent, format(n, big.mark = ",")))) +
+      geom_line(aes(group = lab), color = "grey70", linewidth = 0.6) +
+      geom_vline(xintercept = 0, color = "grey60") +
+      geom_point(size = 2.6) +
+      scale_color_manual(values = PARTY_COL, labels = c(D = "Democratic speakers", R = "Republican speakers"), name = NULL) +
+      labs(x = "directed sentiment  (negative = attacking)", y = NULL) + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
+
+  output$ps_neg_attacked <- renderPlotly({
+    req(dash$power)
+    d <- dash$power$entity_most_attacked
+    d$lab <- factor(ent_lab(d$entity_id), levels = ent_lab(d$entity_id[order(-d$mean_sent)]))
+    p <- ggplot(d, aes(mean_sent, lab, fill = mean_sent,
+        text = sprintf("%s: %.3f (n=%s)", ent_lab(entity_id), mean_sent, format(n, big.mark = ",")))) +
+      geom_col() + geom_vline(xintercept = 0, color = "grey60") +
+      scale_fill_gradient(low = "#b2182b", high = "#f4a582", guide = "none") +
+      labs(x = "mean directed sentiment (lower = more attacked)", y = NULL) + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
+
+  output$ps_own_rank <- renderPlotly({
+    req(dash$power)
+    d <- dash$power$issue_ownership
+    d$lean <- ifelse(d$log2_RD >= 0, "R", "D")
+    d$issue <- factor(d$issue, levels = d$issue[order(d$log2_RD)])
+    p <- ggplot(d, aes(log2_RD, issue, fill = lean,
+        text = sprintf("%s\nlog2(R/D) = %+.2f  (%.1fx %s-owned, n=%s)", issue, log2_RD,
+                       ifelse(log2_RD >= 0, ratio, 1 / ratio),
+                       ifelse(log2_RD >= 0, "R", "D"), format(n_total, big.mark = ",")))) +
+      geom_col() + geom_vline(xintercept = 0, color = "grey60") +
+      scale_fill_manual(values = c(D = unname(PARTY_COL["D"]), R = unname(PARTY_COL["R"])), guide = "none") +
+      labs(x = "<- Democrat-owned    log2(R / D attention rate)    Republican-owned ->",
+           y = NULL) + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
+
+  output$ps_own_attn <- renderPlotly({
+    req(dash$power, length(input$ps_attn_iss) > 0)
+    d <- dash$power$issue_attention_year |> filter(issue %in% input$ps_attn_iss)
+    validate(need(nrow(d) > 0, "Pick at least one issue."))
+    p <- ggplot(d, aes(year, share, color = issue, group = issue,
+        text = sprintf("%s %d: %.1f%% (n=%s)", issue, year, 100 * share, format(n, big.mark = ",")))) +
+      geom_line(linewidth = 0.9) + geom_point(size = 1) +
+      scale_y_continuous(labels = scales::percent) +
+      scale_x_continuous(breaks = seq(2010, 2024, 2)) +
+      labs(x = NULL, y = "share of releases (dominant issue)", color = NULL) + theme_pr()
+    ggplotly(p, tooltip = "text")
+  })
+
+  output$ps_flip_title <- renderText(sprintf("'%s' ownership over time", input$ps_flip_iss))
+  output$ps_own_flip <- renderPlotly({
+    req(dash$power, input$ps_flip_iss)
+    d <- dash$power$issue_ownership_year |> filter(issue == input$ps_flip_iss)
+    validate(need(nrow(d) > 0, "No data for this issue."))
+    bands <- PREZ_TERMS[PREZ_TERMS$xmax <= max(d$year) + 0.5, ]
+    p <- ggplot(d, aes(year, r_share)) +
+      geom_rect(data = bands, inherit.aes = FALSE,
+        aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = party), alpha = 0.12) +
+      geom_hline(yintercept = 0.5, color = "grey50", linetype = "dashed") +
+      geom_line(aes(group = 1,
+        text = sprintf("%d: R share %.0f%% (log2 R/D %+.2f, n=%s)", year, 100 * r_share,
+                       log2_RD, format(n, big.mark = ","))),
+        color = "#6a51a3", linewidth = 1) +
+      geom_point(color = "#6a51a3", size = 1.6) +
+      scale_fill_manual(values = PARTY_COL, guide = "none") +
+      scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+      scale_x_continuous(breaks = seq(2010, 2024, 2)) +
+      labs(x = NULL, y = "Republican share of the issue's attention") + theme_pr()
     ggplotly(p, tooltip = "text")
   })
 
