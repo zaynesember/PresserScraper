@@ -18,6 +18,9 @@ TARGETS <- read.csv(Sys.getenv("WAYBACK_TARGETS",   # roster override for expans
 ONLY <- Sys.getenv("WAYBACK_ONLY", ""); VALID <- nzchar(ONLY)   # subset run = validation (no write)
 if (VALID) TARGETS <- TARGETS[TARGETS$host %in% strsplit(ONLY, ",")[[1]], , drop = FALSE]
 CACHE   <- file.path(nlp_out_dir(), if (VALID) "wayback_cache_val" else "wayback_cache")
+# Raw-CDX cache is shared by VALID and full runs: the archived URL universe does
+# not depend on which mode asked for it, and CDX is the scarce resource.
+CDXCACHE <- file.path(nlp_out_dir(), "wayback_cdx_cache")
 dir.create(CACHE, showWarnings = FALSE)
 MAXART  <- as.integer(Sys.getenv("WAYBACK_MAXART", "220"))
 THROTTLE <- as.numeric(Sys.getenv("WAYBACK_THROTTLE", "0.7"))  # raise to be politer under IA rate-limits
@@ -50,8 +53,19 @@ parse_date2 <- function(txt, url, ts) {
   # body prose can cite historical dates ("...dated back to January 16, 1991..."),
   # so a body-extracted date must also be within ~3y before the capture to count.
   okb  <- function(d) ok(d) && (is.na(tsd) || d >= tsd - 1100)
-  m <- regmatches(top, regexpr(paste0(MON_RX, "\\.?\\s+[0-9]{1,2},?\\s+[0-9]{4}"), top, ignore.case = TRUE))
-  if (length(m)) { d <- mdy_try(m[1]); if (okb(d)) return(d) }
+  # A long-form date in DATELINE position (in/just after the title, ahead of the
+  # prose) is the publication date even when it long predates the capture:
+  # archive-style sites are snapshotted years after publication (waxman's
+  # oversight archive was captured in 2012 holding 2005-and-earlier documents,
+  # so the tight window silently dated 82% of it to the capture day). Deeper in
+  # the body keep the ~3y window, so cited history ("...back to January 16,
+  # 1991...") is still not mistaken for a dateline.
+  mm <- regexpr(paste0(MON_RX, "\\.?\\s+[0-9]{1,2},?\\s+[0-9]{4}"), top, ignore.case = TRUE)
+  if (mm > 0) {
+    d <- mdy_try(regmatches(top, mm))
+    lim <- if (mm <= 300) 7300 else 1100          # 20y in a dateline, ~3y in prose
+    if (ok(d) && (is.na(tsd) || d >= tsd - lim)) return(d)
+  }
   m <- regmatches(top, regexpr("[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}", top))
   if (length(m)) { d <- mdy_try(m[1]); if (okb(d)) return(d) }
   um <- regmatches(url, regexpr("/[0-9]{4}/[0-9]{2}/[a-z]+([0-9]{6})", url, ignore.case = TRUE))
@@ -132,7 +146,23 @@ extract <- function(html, url, ts = "") {
 # and Joomla year-index/non-release articles. CMS column is unreliable for the
 # archived era (a member's old site often differs from its later one), so we don't
 # key on it. Dedup collapses print/Itemid/encoding variants of the same release.
-cdx_articles <- function(host) {
+# Raw archived URL universe for a host, CACHED to disk. CDX is the scarce
+# resource here (the Internet Archive rate-limits it hard, while the content
+# endpoint stays fast), and the raw universe is stable -- it's the *pattern*
+# filtering below that we iterate on. Caching the universe means every future
+# discovery-pattern change is FREE to re-evaluate instead of re-paying CDX.
+# Delete a host's file in wayback_cdx_cache/ to force a refetch.
+cdx_raw <- function(host) {
+  dir.create(CDXCACHE, showWarnings = FALSE, recursive = TRUE)
+  cf <- file.path(CDXCACHE, paste0(gsub("[^a-z0-9]+", "_", tolower(host)), ".rds"))
+  if (file.exists(cf)) return(readRDS(cf))
+  d <- cdx_fetch(host)
+  # only cache a non-empty result: an empty one usually means we were throttled,
+  # and caching that would silently poison every later run for this host.
+  if (!is.null(d) && nrow(d)) saveRDS(d, cf)
+  d
+}
+cdx_fetch <- function(host) {
   # CDX returns rows in alphabetical urlkey order and caps each response at
   # `limit`. A site with a big block of early-sorting junk (waxman's 7,784
   # /htbin CGI urls) therefore consumes the whole budget and the real releases
@@ -168,7 +198,12 @@ cdx_articles <- function(host) {
       if (is.null(rk)) break
     }
   }
-  d <- unique(do.call(rbind, out)); if (is.null(d) || !nrow(d)) return(d)
+  unique(do.call(rbind, out))
+}
+# Select individual-release URLs out of the cached raw universe (pattern union
+# minus negatives, then dedup). Cheap + offline -> safe to iterate on.
+cdx_articles <- function(host) {
+  d <- cdx_raw(host); if (is.null(d) || !nrow(d)) return(d)
   p <- sub("^https?://[^/]+", "", d$url)
   asset  <- "[.](pdf|jpe?g|png|gif|css|js|xml|rss|zip|mp[34]|wmv|mov|ico|svg|woff2?)($|[?])"
   # index2.php is Joomla 1.0's template-less popup/print rendering of the SAME
