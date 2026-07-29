@@ -28,6 +28,11 @@ step(){ local name="$1"; shift; local t0=$SECONDS; say "=== START $name ==="
 say "Fold-in starting. Stopping any DuckDB reader on :7788."
 lsof -ti tcp:7788 2>/dev/null | xargs kill 2>/dev/null || true; sleep 1
 
+# dfm_raw.rds is an if-exists-reuse cache read by tag-complete/topics/partisan;
+# left stale it silently pins those three layers to the PRE-fold-in corpus.
+say "Removing dfm_raw.rds so the DFM rebuilds over the new corpus."
+rm -f "$HOME/Library/Application Support/org.R-project.R/R/pressR_nlp/dfm_raw.rds"
+
 step "rebuild-duckdb"      "$RS" nlp/run_rebuild.R
 step "families"            "$RS" nlp/run_families.R
 step "tag-complete"        "$RS" nlp/run_tag_complete.R
