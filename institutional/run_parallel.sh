@@ -35,8 +35,12 @@ pids=()
 for K in $(seq 1 "$LANES"); do
   ( caffeinate -is Rscript institutional/R/07_collect_feeds.R \
       --configs="$CONFIGS" --lane="$K/$LANES" ) > "$LOGDIR/lane$K.log" 2>&1 &
-  pids+=($!)
-  echo "  lane $K/$LANES -> pid ${pids[-1]}"
+  # $! not ${pids[-1]}: macOS ships bash 3.2, which has no negative array
+  # subscripts, and `set -u` turns that into a fatal error mid-launch -- a
+  # previous run died here having started only lane 1.
+  lane_pid=$!
+  pids+=("$lane_pid")
+  echo "  lane $K/$LANES -> pid $lane_pid"
   sleep 2                       # stagger startup so load_all() doesn't thrash
 done
 
