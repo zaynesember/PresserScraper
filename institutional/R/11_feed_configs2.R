@@ -84,11 +84,16 @@ feed_configs <- function() {
     list("www.veterans.senate.gov", "Veterans' Affairs", "committee", "senate", "D", "insti",
          "https://www.veterans.senate.gov/minority-news",
          "veterans\\.senate\\.gov/20[0-9]{2}/[0-9]"),
+    # /<role>/newsroom is a hub that teases 5 recent items and does not
+    # paginate; the archive behind its "All Press" link does (PageNum_rs). The
+    # hub URL collected 5 items per feed in 0.1 min and looked like a finished
+    # feed. Use the archive path, without the ?type= filter -- it returns the
+    # same set as ?type=press_release and does not depend on the query param.
     list("www.budget.senate.gov", "Budget", "committee", "senate", "R", "insti",
-         "https://www.budget.senate.gov/chairman/newsroom",
+         "https://www.budget.senate.gov/chairman/newsroom/press/",
          "budget\\.senate\\.gov/chairman/newsroom/press/[a-z0-9]"),
     list("www.budget.senate.gov", "Budget", "committee", "senate", "D", "insti",
-         "https://www.budget.senate.gov/ranking-member/newsroom",
+         "https://www.budget.senate.gov/ranking-member/newsroom/press/",
          "budget\\.senate\\.gov/ranking-member/newsroom/press/[a-z0-9]"),
     list("www.energy.senate.gov", "Energy and Natural Resources", "committee", "senate", "R", "insti",
          "https://www.energy.senate.gov/republican-news",
