@@ -23,29 +23,65 @@ insti_item_fetch <- function(url) {
   out
 }
 
-# Body of a release page: the stock extractor, else an Elementor fallback.
+# Text of a node's paragraphs, but only if it reads like prose rather than page
+# furniture. This gate is what makes the fallbacks safe: the densest-text block
+# on a page is often a nav or sidebar list, and on intelligence.senate.gov that
+# produced the *same* 2,085-char "Chairman | Vice Chairman | S.4615 ..." string
+# for every release. Measured on known-good vs known-bad pages:
+#   link/text ratio : <=0.06 for prose, >=1.32 for the sidebar list
+#   mean <p> length : 130-629 for prose, 46 for the sidebar
+# A page that fails the gate stays honestly body-less rather than carrying
+# boilerplate into the corpus.
+insti_prose <- function(node, min_chars = 200) {
+  ps <- rvest::html_text2(rvest::html_elements(node, "p"))
+  ps <- ps[nzchar(trimws(ps))]
+  if (length(ps) == 0) return(NA_character_)
+  total <- sum(nchar(ps))
+  if (total < min_chars) return(NA_character_)
+  link_chars <- sum(nchar(rvest::html_text2(rvest::html_elements(node, "a"))))
+  if (link_chars / total > 0.5) return(NA_character_)   # link list, not prose
+  if (mean(nchar(ps)) < 80) return(NA_character_)       # nav fragments
+  trimws(paste(ps, collapse = "\n\n"))
+}
+
+# Body of a release page: the stock extractor, then two fallbacks.
 #
-# Elementor (the WordPress page builder behind hsgac, commerce, drugcaucus)
-# emits no <article>/<main>/.content wrapper at all, so generic_item_body
-# returns NA -- that alone accounted for ~9.4k body-less rows.
+# generic_item_body fails in two distinct ways on committee sites. Elementor
+# (hsgac, commerce, drugcaucus) emits no <article>/<main>/.content wrapper at
+# all, so it returns NA -- ~9.4k body-less rows. The CFM sites (epw) DO have a
+# perfectly good <article>/.post-content, but it returns 13 characters from some
+# tiny element instead -- another ~5.5k rows.
 #
-# The fallback picks the deepest block whose <p> descendants hold the most text,
-# but that heuristic will happily return a nav/sidebar link list: on
-# intelligence.senate.gov it produced the *same* 2,085-char "Chairman | Vice
-# Chairman | S.4615 ..." boilerplate for every release. Three guards separate
-# real prose from furniture, measured on known-good vs known-bad pages:
-#   Elementor present : TRUE for every good case, FALSE for the intel sidebar
-#   link/text ratio   : <=0.06 prose vs >=1.32 link list
-#   mean <p> length   : >=130 chars prose vs 46 for the sidebar
-# Requiring all three keeps the fallback to the CMS family it was built for; a
-# page that fails them stays honestly body-less rather than carrying boilerplate
-# into the corpus.
+# So: try the named content containers explicitly, keeping whichever holds the
+# most paragraph text, then fall back to the densest <p> block anywhere on the
+# page. Both candidates must clear insti_prose(). An earlier version also
+# required the page to be Elementor, which blocked the CFM case outright; the
+# prose gate alone already rejects the intel sidebar, so that extra condition
+# only ever cost recall.
+.insti_body_selectors <- c(
+  "article", "main", "#content", "#main-content", ".content", ".entry-content",
+  ".post-content", ".field--name-body", ".news-single", ".press-release",
+  ".wysiwyg", ".rich-text", ".page-content"
+)
+
 insti_item_body <- function(doc, url) {
   b <- tryCatch(generic_item_body(doc, url)$body, error = function(e) NA_character_)
   if (length(b) && !is.na(b[1]) && nchar(b[1]) > 200) return(b[1])
 
-  if (!length(rvest::html_elements(doc, "[class*='elementor']"))) return(NA_character_)
+  # 1. Named content containers, best by paragraph text.
+  best <- NA_character_
+  for (sel in .insti_body_selectors) {
+    ns <- tryCatch(rvest::html_elements(doc, sel), error = function(e) NULL)
+    if (is.null(ns) || !length(ns)) next
+    for (n in ns) {
+      cand <- insti_prose(n)
+      if (!is.na(cand) && (is.na(best) || nchar(cand) > nchar(best))) best <- cand
+    }
+  }
+  if (!is.na(best)) return(best)
 
+  # 2. Deepest node whose <p> descendants hold the most text -- the tightest
+  #    wrapper around the prose, not the whole page that also contains it.
   nodes <- rvest::html_elements(doc, "section, div, article, main")
   if (!length(nodes)) return(NA_character_)
   score <- vapply(nodes, function(n) {
@@ -54,22 +90,9 @@ insti_item_body <- function(doc, url) {
     sum(nchar(rvest::html_text2(ps)))
   }, numeric(1))
   if (!length(score) || max(score) < 200) return(NA_character_)
-
-  # Deepest node within 5% of the best score: the tightest wrapper around the
-  # text, not the whole page that also contains it.
   ok <- which(score >= 0.95 * max(score))
   depth <- vapply(nodes[ok], function(n) length(xml2::xml_parents(n)), 1L)
-  pick <- nodes[ok][[which.max(depth)]]
-
-  ps <- rvest::html_text2(rvest::html_elements(pick, "p"))
-  ps <- ps[nzchar(trimws(ps))]
-  if (length(ps) == 0) return(NA_character_)
-  total <- sum(nchar(ps))
-  link_chars <- sum(nchar(rvest::html_text2(rvest::html_elements(pick, "a"))))
-  if (total < 200) return(NA_character_)
-  if (link_chars / total > 0.5) return(NA_character_)   # link list, not prose
-  if (mean(nchar(ps)) < 80) return(NA_character_)       # nav fragments
-  trimws(paste(ps, collapse = "\n\n"))
+  insti_prose(nodes[ok][[which.max(depth)]])
 }
 
 digest_key <- function(x) paste0("u", substr(gsub("[^A-Za-z0-9]", "", x), 1, 60),
