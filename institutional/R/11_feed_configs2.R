@@ -48,11 +48,17 @@ feed_configs <- function() {
     list("www.finance.senate.gov", "Finance", "committee", "senate", "D", "insti",
          "https://www.finance.senate.gov/ranking-members-news",
          "finance\\.senate\\.gov/ranking-members-news/[a-z0-9]"),
-    list("www.indian.senate.gov", "Indian Affairs", "committee", "senate", "R", "insti",
-         "https://www.indian.senate.gov/newsroom/republican-news/",
+    # Indian Affairs paginates its newsroom client-side (a jet-popup filter), so
+    # the listing exposes only 6 items and no pager scheme responds -- both feeds
+    # collected 6 rows spanning 4 months and looked finished. The sitemap carries
+    # the full archive: 445 republican + 737 democratic item URLs. The party lives
+    # in the item path, which is the site's own labelling, so attribution per feed
+    # still holds. Same treatment as hsgac/help.
+    list("www.indian.senate.gov", "Indian Affairs", "committee", "senate", "R", "sitemap",
+         "https://www.indian.senate.gov/sitemap_index.xml",
          "indian\\.senate\\.gov/newsroom/press-release/republican/"),
-    list("www.indian.senate.gov", "Indian Affairs", "committee", "senate", "D", "insti",
-         "https://www.indian.senate.gov/newsroom/democratic-news/",
+    list("www.indian.senate.gov", "Indian Affairs", "committee", "senate", "D", "sitemap",
+         "https://www.indian.senate.gov/sitemap_index.xml",
          "indian\\.senate\\.gov/newsroom/press-release/democratic/"),
     list("www.appropriations.senate.gov", "Appropriations", "committee", "senate", "R", "insti",
          "https://www.appropriations.senate.gov/news/majority",

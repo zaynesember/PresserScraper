@@ -106,6 +106,65 @@ targets <- if (length(args)) args else c(
   "aging.senate.gov#np#joint"
 )
 
+# When a listing yields few items and no pager, the usual cause is that it is a
+# landing page rather than an archive (budget.senate.gov's /<role>/newsroom
+# teased 5 items behind an "All Press" link) or that the pagination scheme is one
+# insti_detect_pager does not probe. Hunt for both: report same-origin anchors
+# that look like an archive/"view all" link, then brute-force common pagination
+# forms against the listing and the item path, reporting how many NEW item URLs
+# each yields. Read-only.
+hunt_archive <- function(listing, item_re) {
+  doc <- get_html(listing)
+  if (is.null(doc)) { cat("  listing unreachable\n"); return(invisible()) }
+  base0 <- insti_feed_items(doc, listing, item_re, date_from_item = FALSE)$url
+  cat("  page-0 items: ", length(base0), "\n", sep = "")
+
+  a <- rvest::html_elements(doc, "a[href]")
+  href <- abs_urls(rvest::html_attr(a, "href"), listing)
+  txt <- trimws(gsub("\\s+", " ", rvest::html_text(a)))
+  arch <- !is.na(href) & grepl(url_origin(listing), href, fixed = TRUE) &
+    (grepl("^(all|view all|more|see all|archive|older)", txt, ignore.case = TRUE) |
+       grepl("all-|/archive|type=|page=", href, ignore.case = TRUE))
+  if (any(arch)) {
+    cat("  archive-ish links on the page:\n")
+    for (u in unique(paste0(substr(txt[arch], 1, 24), "  ->  ", href[arch])))
+      cat("      ", u, "\n", sep = "")
+  } else cat("  no archive-style link found on the listing\n")
+
+  # Candidate listings: the item path's own directory is often the real archive.
+  # Strip regex escapes before treating item_re as a path, or the URL is mangled.
+  plain <- gsub("\\\\", "", item_re)
+  item_dir <- regmatches(plain, regexpr("[A-Za-z0-9.][A-Za-z0-9./_-]*/$", plain))
+  cands <- unique(c(
+    paste0(sub("/$", "", listing), "/page/2/"),
+    paste0(listing, if (grepl("\\?", listing)) "&" else "?", "PageNum_rs=2"),
+    paste0(listing, if (grepl("\\?", listing)) "&" else "?", "page=2"),
+    paste0(listing, if (grepl("\\?", listing)) "&" else "?", "page=1"),
+    if (length(item_dir) && nzchar(item_dir)) paste0("https://", item_dir)
+  ))
+  cat("  brute-force candidates (want NEW item urls):\n")
+  for (u in cands) {
+    d <- get_html(u)
+    if (is.null(d)) { cat(sprintf("      %-64s NULL\n", substr(u, 9, 72))); next }
+    g <- insti_feed_items(d, listing, item_re, date_from_item = FALSE)$url
+    cat(sprintf("      %-64s %3d items, %3d NEW\n", substr(u, 9, 72),
+                length(g), length(setdiff(g, base0))))
+  }
+
+  # If the listing paginates client-side there is nothing to walk, and the
+  # sitemap engine is the way in (that is what hsgac and help use). Report how
+  # many item URLs a sitemap would yield for this feed's item pattern.
+  origin <- url_origin(listing)
+  for (sm in paste0(origin, c("/sitemap_index.xml", "/sitemap.xml", "/wp-sitemap.xml"))) {
+    urls <- tryCatch(sitemap_urls(sm), error = function(e) character(0))
+    if (!length(urls)) { cat(sprintf("      %-64s no sitemap\n", substr(sm, 9, 72))); next }
+    hit <- grep(item_re, urls, value = TRUE)
+    cat(sprintf("      %-64s %d urls, %d match item_re\n", substr(sm, 9, 72),
+                length(urls), length(hit)))
+    if (length(hit)) break
+  }
+}
+
 # Every same-origin anchor with a plausible title, grouped by path prefix. This
 # is the ground truth for what the listing actually links to.
 listing_anatomy <- function(doc, base) {
@@ -164,8 +223,11 @@ for (t in targets) {
 
   pager <- insti_detect_pager(f$listing, doc, f$item_re)
   cat("  pager detected: ", pager$mode, " ", pager$param %||% "", "\n", sep = "")
-  if (identical(pager$mode, "none"))
+  if (identical(pager$mode, "none")) {
     cat("  VERDICT : PAGINATION NEVER ENGAGED -- haul is capped at one listing page.\n")
+    cat("  hunting for an archive listing / unprobed pager:\n")
+    hunt_archive(f$listing, f$item_re)
+  }
 
   # Body extraction on one item: distinguishes walk failure from body failure.
   # tryCatch because an item page is exactly where a walk-killing error surfaces
