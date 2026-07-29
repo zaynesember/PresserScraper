@@ -68,13 +68,20 @@ feed_configs <- function() {
          "https://www.judiciary.senate.gov/press/minority",
          "judiciary\\.senate\\.gov/press/dem/releases/"),
 
-    # ---- Senate: Rules (items under the listing path; listing lacks dates)
+    # ---- Senate: Rules (listing lacks dates)
+    # The item path encodes the party that held the majority when the release
+    # was published, NOT the listing it now appears under: the minority-news
+    # listing is all Klobuchar-era releases whose permalinks still live under
+    # /news/majority-news/. A minority-only regex therefore matched nothing and
+    # the D feed collected 0 rows. Both feeds accept either path -- the two
+    # listings serve disjoint item sets (verified), so party still comes from
+    # the feed, which is what the schema wants.
     list("www.rules.senate.gov", "Rules and Administration", "committee", "senate", "R", "insti",
          "https://www.rules.senate.gov/news/majority-news",
-         "rules\\.senate\\.gov/news/majority-news/[a-z0-9]"),
+         "rules\\.senate\\.gov/news/(majority|minority)-news/[a-z0-9]"),
     list("www.rules.senate.gov", "Rules and Administration", "committee", "senate", "D", "insti",
          "https://www.rules.senate.gov/news/minority-news",
-         "rules\\.senate\\.gov/news/minority-news/[a-z0-9]"),
+         "rules\\.senate\\.gov/news/(majority|minority)-news/[a-z0-9]"),
 
     # ---- Senate: Small Business (CFM; relative pressreleases?ID=<GUID> items)
     list("www.sbc.senate.gov", "Small Business and Entrepreneurship", "committee", "senate", "R", "insti",
