@@ -51,14 +51,39 @@ if ("--list" %in% args) {
 targets <- args[!grepl("^--", args)]
 if (!length(targets)) stop("give one or more raw .rds filenames, or --list")
 
-# Refuse to touch a file whose host an active collector may also be writing:
-# the lanes only ever write feeds from the round-2 config, so that is the guard.
+# Refuse to touch a file whose host a *running* lane may also be hitting.
+#
+# Blocking every host in the config is too blunt: lanes are partitioned by host
+# and finish at different times, so once the lane owning a host has exited that
+# host is free. Work out which lane owns each host using the same partition
+# 07_collect_feeds.R uses, and block only the hosts owned by lanes still alive.
 active_hosts <- character(0)
-if (any(grepl("07_collect_feeds.R", system("ps -eo command=", intern = TRUE)))) {
+ps_lines <- tryCatch(system("ps -eo command=", intern = TRUE), error = function(e) character(0))
+# Match how R itself launches the script (--file=...), not any command line that
+# merely mentions it: a shell one-liner containing both "07_collect_feeds.R" and
+# "--lane=" would otherwise be read as a running lane and skew this guard.
+coll <- grep("--file=.*07_collect_feeds\\.R", ps_lines, value = TRUE)
+if (length(coll)) {
+  lanes <- unique(sub(".*--lane=([0-9]+)/([0-9]+).*", "\\1/\\2", grep("--lane=", coll, value = TRUE)))
+  cfg_name <- sub(".*--configs=([^ ]+).*", "\\1", grep("--configs=", coll, value = TRUE)[1])
+  if (is.na(cfg_name) || !nzchar(cfg_name)) cfg_name <- "11_feed_configs2.R"
   e <- new.env()
-  sys.source(file.path(ROOT, "institutional", "R", "11_feed_configs2.R"), envir = e)
-  active_hosts <- unique(e$feed_configs()$host)
-  message("collector running; ", length(active_hosts), " hosts are off limits")
+  sys.source(file.path(ROOT, "institutional", "R", cfg_name), envir = e)
+  cfg <- e$feed_configs()
+  if (length(lanes)) {
+    N <- as.integer(sub(".*/", "", lanes[1]))
+    live <- as.integer(sub("/.*", "", lanes))
+    tab <- sort(table(cfg$host), decreasing = TRUE)
+    hosts <- names(tab)
+    lane_of <- setNames(((seq_along(hosts) - 1L) %% N) + 1L, hosts)
+    active_hosts <- names(lane_of)[lane_of %in% live]
+    message(length(live), " lane(s) of ", N, " still running (", paste(sort(live), collapse = ","),
+            "); ", length(active_hosts), " hosts off limits")
+  } else {
+    # A collector is running but not lane-partitioned: block the whole config.
+    active_hosts <- unique(cfg$host)
+    message("un-partitioned collector running; ", length(active_hosts), " hosts off limits")
+  }
 }
 
 for (t in targets) {
@@ -82,16 +107,48 @@ for (t in targets) {
   bak <- paste0(f, ".bak")
   if (!file.exists(bak)) file.copy(f, bak)
 
-  filled <- 0L
+  # Boilerplate guard. On some hosts the extractor returns the SAME string for
+  # every release -- intelligence.senate.gov yields an identical 224-char
+  # "Intelligence Authorization Act ..." block, so a naive backfill would store
+  # 1,057 copies of it, which is worse than leaving those rows body-less. Refuse
+  # a candidate that duplicates a body already present in this file, and bail out
+  # of the file entirely once that keeps happening.
+  seen <- new.env(parent = emptyenv())
+  for (bb in x$body[has_body(x$body)]) {
+    key <- substr(bb, 1, 400)
+    assign(key, (if (is.null(seen[[key]])) 0L else seen[[key]]) + 1L, envir = seen)
+  }
+
+  filled <- 0L; dup_skipped <- 0L
   for (k in seq_along(need)) {
     i <- need[k]
     doc <- get_html(x$url[i])
     if (!is.null(doc)) {
       b <- tryCatch(insti_item_body(doc, x$url[i]), error = function(e) NA_character_)
-      if (has_body(b)) { x$body[i] <- b; filled <- filled + 1L }
+      if (has_body(b)) {
+        key <- substr(b, 1, 400)
+        n_same <- if (is.null(seen[[key]])) 0L else seen[[key]]
+        if (n_same >= 2L) {
+          dup_skipped <- dup_skipped + 1L
+        } else {
+          x$body[i] <- b; filled <- filled + 1L
+          assign(key, n_same + 1L, envir = seen)
+        }
+      }
     }
-    if (k %% 100 == 0) message("   ", k, "/", length(need), "  filled ", filled)
+    if (k %% 100 == 0)
+      message("   ", k, "/", length(need), "  filled ", filled,
+              if (dup_skipped) paste0("  (", dup_skipped, " boilerplate skipped)") else "")
+    # If nearly everything is a duplicate, this host returns one canned block.
+    if (dup_skipped >= 25L && dup_skipped > 3L * filled) {
+      message("   !! ABORTING ", basename(f), ": ", dup_skipped,
+              " duplicate bodies vs ", filled, " real ones -- this host returns",
+              " boilerplate, leaving the remaining rows body-less")
+      break
+    }
   }
+  if (dup_skipped)
+    message("   ", dup_skipped, " candidate bodies skipped as duplicates of existing text")
 
   tmp <- paste0(f, ".tmp")
   saveRDS(x, tmp); file.rename(tmp, f)
