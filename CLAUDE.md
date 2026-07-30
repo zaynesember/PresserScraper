@@ -20,11 +20,14 @@ Two branches, deliberately:
 DuckDB (single file, **single-writer**):
 `~/Library/Application Support/org.R-project.R/R/pressR_nlp/press.duckdb`
 
-Currently **900,016** releases: `scraped` 436,201 + `stout` 288,043 + `wangtucker` 169,366 +
-`wayback` 6,406. Every layer table (`readability`, `sentiment`, `issue_labels`,
-`release_family`) sits at 862,613 = the usable subset. Analyses key on the **`source`**
-column; institutional rows will add `committee`/`leadership`/`caucus` values so member-level
-analyses can exclude them with one predicate.
+Currently **1,041,259** releases (fold-in 2026-07-30): `scraped` 436,201 + `stout` 288,043 +
+`wangtucker` 169,366 + `committee` 120,798 + `wayback` 16,972 + `leadership` 4,962 +
+`caucus` 4,917. Every layer table (`readability`, `sentiment`, `issue_labels`,
+`release_family`) sits at 999,654 = the usable subset. Analyses key on the **`source`**
+column; `source IN ('committee','leadership','caucus')` isolates institutional rows, so
+member-level analyses exclude them with one predicate. The corpus is URL-unique by
+construction (enforced at staging AND in the DuckDB build; the streamed year files and the
+store must agree — layers stream the files directly).
 
 ## Rules that have actually bitten us
 
