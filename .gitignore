@@ -15,3 +15,6 @@ SESSION_PROGRESS.md
 # newsletters) — ~8.7 GB, derived/third-party, not for git. Keep blog/ itself trackable
 # (posts, notebooks, reference PDFs) but never the bulk data.
 blog/data/
+
+# NARA crawler outputs (units table, walk/extract results) — collected data, not code.
+nara/data/
