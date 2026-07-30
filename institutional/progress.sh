@@ -63,15 +63,33 @@ snapshot() {
   done
 
   # ---- targeted re-collects ---------------------------------------------
+  # A walk prints nothing until it finishes, so an in-flight feed is detected
+  # by a started "=====" block with no "->" result yet; its start time is the
+  # log's mtime (the walk itself never writes). Without this, a feed that has
+  # been walking for an hour looks identical to a finished job.
   if ls "$LOGDIR"/recollect*.log >/dev/null 2>&1; then
     echo
-    echo "RE-COLLECTS (last feed started; -> line = its result when done)"
+    echo "RE-COLLECTS"
     for log in "$LOGDIR"/recollect*.log; do
-      local cur res
+      local name starts results cur res state age
+      name=$(basename "$log" .log | sed 's/^recollect_*//;s/^$/(first)/')
+      starts=$(grep -cE '^===== ' "$log")
+      results=$(grep -cE '^  -> ' "$log")
       cur=$(grep -oE '^===== [^ ]+' "$log" | tail -1 | sed 's/^===== //')
-      res=$(grep -E '^  ->' "$log" | tail -1 | sed 's/^  -> //')
-      printf "  %-20s %-42s %s\n" "$(basename "$log" .log | sed 's/^recollect_*//;s/^$/-/')" \
-        "${cur:0:42}" "${res:0:60}"
+      res=$(grep -E '^  -> ' "$log" | tail -1 | sed 's/^  -> //')
+      if [ "$starts" -gt "$results" ]; then
+        age=$(( ($(date +%s) - $(stat -f %m "$log")) / 60 ))
+        if pgrep -f "exec/R.*14_recollect_feed" >/dev/null 2>&1; then
+          # mtime tracks the throttle chatter, so this is time since the last
+          # network activity -- if it grows past a few minutes the walk is hung.
+          state="WALKING NOW (last activity ${age}m ago)"
+        else
+          state="!! DIED MID-FEED"
+        fi
+        printf "  %-10s %-46s %s\n" "$name" "${cur:0:46}" "$state"
+      else
+        printf "  %-10s %-46s done: %s\n" "$name" "${cur:0:46}" "${res:0:52}"
+      fi
     done
   fi
 
@@ -102,6 +120,12 @@ snapshot() {
   bad=$(grep -lE "Execution halted" "$LOGDIR"/*.log 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ')
   echo
   if [ -n "$bad" ]; then echo "!! CRASHED LOGS: $bad"; else echo "no crashed logs"; fi
+
+  # ---- what remains after the current jobs drain ---------------------------
+  echo
+  echo "STILL QUEUED (manual, in order): audit the skipped hosts (foreign/energy/"
+  echo "  hsgac/epw/democrats-foreignaffairs) -> final --sweep -> 09_assemble.R"
+  echo "  -> fold-in report. Fold-in itself launches only on explicit go-ahead."
 }
 
 if [ -n "$ONCE" ]; then
