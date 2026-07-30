@@ -46,5 +46,5 @@ step "readability"         "$RS" nlp/run_readability.R
 step "persist-readability" "$RS" nlp/dashboard/persist_readability.R
 step "prep-dashboard"      "$RS" nlp/dashboard/prep_dashboard.R
 
-say "===== FOLD-IN COMPLETE -- corpus now includes external/wayback (~895,379 releases) ====="
+say "===== FOLD-IN COMPLETE -- corpus now includes every external/ source (wayback + institutional; expect ~1.04M releases) ====="
 say "Relaunch the dashboard: Rscript -e 'shiny::runApp(\"nlp/dashboard/app.R\", port=7788L)'"
