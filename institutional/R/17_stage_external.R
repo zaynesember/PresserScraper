@@ -40,6 +40,31 @@ if (any(no_date)) {
   x <- x[!no_date, , drop = FALSE]
 }
 
+# Drop rows whose URL already exists elsewhere in the corpus. This must happen
+# HERE, in the staged files: families and tag-complete stream the year files
+# directly (not DuckDB), quanteda uses url as the docname, and rbind2 refuses
+# duplicate docnames -- two member releases on minority-committee hosts were
+# swept by both the member scrape and this collection at identical URLs, and
+# they aborted tag-complete. A DuckDB-level dedup alone does not reach the
+# streamed path (that lesson cost one 52-minute families rerun). The member-
+# attributed copy is the one kept, matching the store's first-inserted rule.
+message("collecting existing corpus urls (archive + external/wayback)...")
+H <- file.path(ROOT, "nlp", "R")
+source(file.path(H, "00_foundation.R"))
+existing <- new.env(parent = emptyenv())
+arch <- c(nlp_year_files(),
+          list.files(file.path(tools::R_user_dir("pressR_nlp", "data"), "external", "wayback"),
+                     pattern = "releases-[0-9]{4}[.]rds$", full.names = TRUE))
+for (f in arch) {
+  for (u in unique(readRDS(f)$url)) assign(u, TRUE, envir = existing)
+}
+dup <- vapply(x$url, function(u) isTRUE(existing[[u]]), logical(1), USE.NAMES = FALSE)
+if (any(dup)) {
+  message("  DROPPING ", sum(dup), " row(s) whose url already exists in the corpus:")
+  for (u in utils::head(x$url[dup], 10)) message("    ", u)
+  x <- x[!dup, , drop = FALSE]
+}
+
 out <- data.frame(
   date      = as.Date(x$date),
   title     = as.character(x$title),
