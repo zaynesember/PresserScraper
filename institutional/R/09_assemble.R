@@ -83,7 +83,11 @@ all$date <- as.Date(all$date)
 all$party <- all$party_feed
 maj <- !is.na(all$party_feed) & all$party_feed == "MAJ"
 all$party[maj] <- chamber_majority(all$date[maj], all$chamber[maj])
-all$party[!is.na(all$party) & all$party == "NP"] <- NA_character_
+# NP is nonpartisan/joint; ALL is an unbranded combined feed carrying both
+# parties' releases (armed-services.senate.gov). Neither can be attributed to a
+# party, and 11_feed_configs2.R says so explicitly -- but only NP was mapped, so
+# 274 rows were reaching analyses with the literal string "ALL" as their party.
+all$party[!is.na(all$party) & all$party %in% c("NP", "ALL")] <- NA_character_
 if (any(maj)) {
   res <- table(all$party[maj], useNA = "ifany")
   message("  [MAJ resolved] ", sum(maj), " majority-branded rows -> ",
