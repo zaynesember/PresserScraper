@@ -34,6 +34,20 @@ nlp_build_duckdb <- function(db_path = nlp_duckdb_path(), overwrite = TRUE) {
     invisible(NULL)
   })
 
+  # URL uniqueness is an invariant downstream layers rely on -- quanteda uses
+  # url as the docname and rbind2 REFUSES duplicate docnames, which aborted
+  # tag-complete 14 minutes in. Duplicates are real: a member release published
+  # on a minority-committee host is swept by both the member-site scrape and the
+  # institutional collection at the identical URL (2 such urls in the first
+  # combined build). Keep the first-inserted copy: the year archive streams
+  # before external/, so the member-attributed `scraped` row wins and the
+  # institutional copy is the one dropped.
+  ndup <- dbExecute(con, "DELETE FROM releases WHERE rowid IN (
+      SELECT rowid FROM (
+        SELECT rowid, ROW_NUMBER() OVER (PARTITION BY url ORDER BY rowid) rn
+        FROM releases) WHERE rn > 1)")
+  if (ndup > 0) message(sprintf("  dropped %d duplicate-url row(s) (first-inserted copy kept)", ndup))
+
   # Type the date column + helpful indexes/views for fast dashboard slices.
   dbExecute(con, "ALTER TABLE releases ALTER date SET DATA TYPE DATE USING strptime(date,'%Y-%m-%d')::DATE")
   dbExecute(con, "ALTER TABLE releases ADD COLUMN year INTEGER")
