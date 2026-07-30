@@ -59,7 +59,14 @@ XWALK <- list(
   list("Ethics",                                    c("Government Reform & Oversight")),
   list("Rules and Administration",                  c("Government Reform & Oversight")),
   list("House Administration",                      c("Government Reform & Oversight")),
-  list("Economic",                                  c("Economy & Jobs","Taxes & Budget"))
+  list("Economic",                                  c("Economy & Jobs","Taxes & Budget")),
+  # After "Rules and Administration" in match order: fixed-string matching would
+  # otherwise let bare "on Rules" swallow the Senate committee. House Rules is
+  # floor procedure -- a process committee, same treatment as the other three.
+  list("on Rules",                                  c("Government Reform & Oversight")),
+  # The China select committee's remit is strategic competition: security,
+  # diplomacy, trade/economics, and technology controls.
+  list("Chinese Communist Party",                   c("Foreign Affairs","Defense & National Security","Trade","Technology & Broadband"))
 )
 expected_for <- function(nm) {
   for (e in XWALK) if (grepl(e[[1]], nm, fixed = TRUE)) return(e[[2]])
