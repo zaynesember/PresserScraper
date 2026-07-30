@@ -47,10 +47,17 @@ args <- commandArgs(trailingOnly = TRUE)
 # it does not coordinate with them, so it would otherwise double up on a host.
 if ("--audit-pagers" %in% args) {
   RAW <- file.path(ROOT, "institutional", "data", "raw")
+  # --skip-hosts=a,b,c : leave these hosts un-probed. Lets the audit start while
+  # collectors are still working elsewhere -- name the hosts they are on, audit
+  # everything else now, and sweep the skipped ones once those jobs exit.
+  skip_arg <- sub("^--skip-hosts=", "", grep("^--skip-hosts=", args, value = TRUE))
+  skip_hosts <- if (length(skip_arg)) strsplit(skip_arg[1], ",", fixed = TRUE)[[1]] else character(0)
+  if (length(skip_hosts)) message("skipping busy hosts: ", paste(skip_hosts, collapse = ", "))
   rows <- list()
   for (i in seq_len(nrow(cfg))) {
     f <- cfg[i, ]
     if (!identical(f$engine, "insti")) next          # sitemap/guid do not paginate
+    if (f$host %in% skip_hosts) next
     dest <- file.path(RAW, paste0("feed_", gsub("[^a-z0-9#._-]", "_", f$feed_id), ".rds"))
     if (!file.exists(dest)) next
     x <- tryCatch(readRDS(dest), error = function(e) NULL)
