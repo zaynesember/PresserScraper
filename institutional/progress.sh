@@ -48,24 +48,41 @@ snapshot() {
   # ---- body backfills ----------------------------------------------------
   echo
   echo "BODY BACKFILLS"
-  for f in backfill_hsgac backfill_commerce; do
-    local log="$LOGDIR/$f.log"
+  for log in "$LOGDIR"/backfill_*.log; do
     [ -f "$log" ] || continue
-    local st prog file
-    if pgrep -f "exec/R.*13_backfill_bodies" >/dev/null 2>&1; then st="run "; else st="done"; fi
-    prog=$(grep -oE '[0-9]+/[0-9]+  filled [0-9]+' "$log" | tail -1)
-    file=$(grep -oE '^== [^:]+' "$log" | tail -1 | sed 's/^== //')
-    printf "  %-18s %s %-34s %s\n" "$f" "$st" "${file:0:34}" "${prog:-starting}"
+    local f st prog file
+    f=$(basename "$log" .log)
+    # done/run per log: a log whose last file-block printed "done:" is finished
+    # even while other backfill processes are still alive.
+    if grep -qE 'done: filled' "$log" && ! grep -qE '^== [^:]+: .*missing a body$' <(tail -5 "$log"); then
+      st="done"
+    elif pgrep -f "exec/R.*13_backfill_bodies" >/dev/null 2>&1; then st="run "; else st="done"; fi
+    prog=$(grep -oE '([0-9]+/[0-9]+  filled [0-9]+|done: filled [0-9]+ of [0-9]+; coverage now [0-9.]+%)' "$log" | tail -1)
+    file=$(grep -oE '^== [^:]+' "$log" | tail -1 | sed 's/^== //;s/^feed_//')
+    printf "  %-18s %s %-30s %s\n" "${f#backfill_}" "$st" "${file:0:30}" "${prog:-starting}"
   done
 
   # ---- targeted re-collects ---------------------------------------------
   if ls "$LOGDIR"/recollect*.log >/dev/null 2>&1; then
     echo
-    echo "RE-COLLECTS (most recent result per log)"
+    echo "RE-COLLECTS (last feed started; -> line = its result when done)"
     for log in "$LOGDIR"/recollect*.log; do
-      printf "  %-22s %s\n" "$(basename "$log" .log)" \
-        "$(grep -E '^  ->' "$log" | tail -1 | sed 's/^  -> //')"
+      local cur res
+      cur=$(grep -oE '^===== [^ ]+' "$log" | tail -1 | sed 's/^===== //')
+      res=$(grep -E '^  ->' "$log" | tail -1 | sed 's/^  -> //')
+      printf "  %-20s %-42s %s\n" "$(basename "$log" .log | sed 's/^recollect_*//;s/^$/-/')" \
+        "${cur:0:42}" "${res:0:60}"
     done
+  fi
+
+  # ---- pager audit ---------------------------------------------------------
+  if [ -f "$LOGDIR/audit_pagers.log" ]; then
+    echo
+    if pgrep -f "audit-pagers" >/dev/null 2>&1; then
+      echo "PAGER AUDIT: running ($(grep -c ' ok$\|CAPPED' "$LOGDIR/audit_pagers.log" 2>/dev/null) feeds probed)"
+    else
+      echo "PAGER AUDIT: done -- $(grep -oE '^[0-9]+ feed\(s\) need re-collection' "$LOGDIR/audit_pagers.log" | tail -1)"
+    fi
   fi
 
   # ---- outputs -----------------------------------------------------------
