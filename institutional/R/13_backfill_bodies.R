@@ -76,9 +76,21 @@ if (length(coll)) {
     tab <- sort(table(cfg$host), decreasing = TRUE)
     hosts <- names(tab)
     lane_of <- setNames(((seq_along(hosts) - 1L) %% N) + 1L, hosts)
-    active_hosts <- names(lane_of)[lane_of %in% live]
+    owned <- names(lane_of)[lane_of %in% live]
+    # Ownership alone is still too blunt. A lane walks its feeds sequentially,
+    # writes each output on completion, and skips any feed whose output exists --
+    # so once every feed on a host has an output, the lane will never touch that
+    # host again even though the process is alive (it is off working its other
+    # hosts). Block only owned hosts that still have an uncollected feed; the
+    # feed a lane is walking right now has no output yet, so its host stays
+    # blocked. Pending work only ever shrinks, so this cannot race the lane onto
+    # a freed host.
+    dest <- file.path(RAW, paste0("feed_", gsub("[^a-z0-9#._-]", "_", cfg$feed_id), ".rds"))
+    pending_hosts <- unique(cfg$host[!file.exists(dest)])
+    active_hosts <- intersect(owned, pending_hosts)
     message(length(live), " lane(s) of ", N, " still running (", paste(sort(live), collapse = ","),
-            "); ", length(active_hosts), " hosts off limits")
+            "); ", length(active_hosts), " of ", length(owned),
+            " owned hosts still have pending feeds and are off limits")
   } else {
     # A collector is running but not lane-partitioned: block the whole config.
     active_hosts <- unique(cfg$host)
