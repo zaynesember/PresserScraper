@@ -28,6 +28,15 @@ UA <- "pressR-research (congressional press-release archive)"
 GET <- function(url, to = 60) request(url) |> req_timeout(to) |> req_user_agent(UA) |>
   req_retry(max_tries = 4, backoff = ~ min(30, 3 * 2^.x)) |> req_perform()
 LONG_DATE <- "(January|February|March|April|May|June|July|August|September|October|November|December)\\s+[0-9]{1,2},?\\s+[0-9]{4}"
+# How far into title+body to look for a date. Was 4,000 -- which sat just under
+# the real datelines on chrome-heavy templates: ortiz.house.gov wraps every
+# release in a nav menu that pushes its dateline to a median position of 4,175,
+# so 842 of his 851 releases found no date and fell back to the capture day.
+# Measured first-date positions across the piled rows: 4k catches 38%, 8k 50%,
+# 20k 57% -- and 20k is where the curve flattens (Inf adds 4 rows). Dates found
+# past the first 300 chars still get only the ~3y prose lookback below, so a
+# sidebar date cannot masquerade as a dateline.
+TOPW <- as.integer(Sys.getenv("WAYBACK_TOPW", "20000"))
 
 MON_RX <- paste0("(January|February|March|April|May|June|July|August|September|",
                  "October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec)")
@@ -48,23 +57,26 @@ mdy_try <- function(s) {
 # that overshoots the capture rolls back one year.
 parse_date2 <- function(txt, url, ts) {
   tsd <- if (nzchar(ts)) suppressWarnings(as.Date(substr(ts, 1, 8), "%Y%m%d")) else as.Date(NA)
-  top <- substr(txt, 1, 4000)
+  top <- substr(txt, 1, TOPW)
   ok   <- function(d) !is.na(d) && (is.na(tsd) || d <= tsd + 2)
   # body prose can cite historical dates ("...dated back to January 16, 1991..."),
   # so a body-extracted date must also be within ~3y before the capture to count.
   okb  <- function(d) ok(d) && (is.na(tsd) || d >= tsd - 1100)
-  # A long-form date in DATELINE position (in/just after the title, ahead of the
-  # prose) is the publication date even when it long predates the capture:
-  # archive-style sites are snapshotted years after publication (waxman's
-  # oversight archive was captured in 2012 holding 2005-and-earlier documents,
-  # so the tight window silently dated 82% of it to the capture day). Deeper in
-  # the body keep the ~3y window, so cited history ("...back to January 16,
-  # 1991...") is still not mistaken for a dateline.
+  # The FIRST long-form date in the text is the dateline, and it gets a 20-year
+  # lookback regardless of where it sits. This replaces a position rule (20y if
+  # within the first 300 chars, ~3y after that) that assumed the dateline comes
+  # early in the string. It does not on chrome-heavy templates: ortiz.house.gov
+  # opens with a nav menu that pushes the dateline to a median position of 4,175,
+  # so the real date ("April 7, 2006", 1,732 days before the 2011 capture) failed
+  # the ~3y prose window, the parser fell through to the no-year branch below,
+  # and that paired a stray "April 7" with the CAPTURE year -- a confidently
+  # wrong date. Taking the first date instead is what the position rule was
+  # really reaching for: cited history ("...dated back to January 16, 1991...")
+  # sits in prose AFTER the dateline, so first-match already excludes it.
   mm <- regexpr(paste0(MON_RX, "\\.?\\s+[0-9]{1,2},?\\s+[0-9]{4}"), top, ignore.case = TRUE)
   if (mm > 0) {
     d <- mdy_try(regmatches(top, mm))
-    lim <- if (mm <= 300) 7300 else 1100          # 20y in a dateline, ~3y in prose
-    if (ok(d) && (is.na(tsd) || d >= tsd - lim)) return(d)
+    if (ok(d) && (is.na(tsd) || d >= tsd - 7300)) return(d)
   }
   m <- regmatches(top, regexpr("[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}", top))
   if (length(m)) { d <- mdy_try(m[1]); if (okb(d)) return(d) }
@@ -84,7 +96,15 @@ parse_date2 <- function(txt, url, ts) {
       d <- mdy_try(paste(m[1], yr)); if (!is.na(d) && d > tsd) d <- mdy_try(paste(m[1], yr - 1))
       if (!is.na(d)) return(d) }
   }
-  tsd
+  # NO capture-timestamp fallback. Returning `tsd` here silently manufactured a
+  # publication date out of a crawl date: a 2026-08-03 audit found 33% of the
+  # staged pool sitting in same-date piles -- Ortiz 842 of 851 rows stamped
+  # 2011-01-03 while their bodies read "December 28, 2009", Kirk 881 stamped
+  # 2009-08-05 on pages that are Joomla ISSUE pages carrying no date at all.
+  # A release whose date cannot be recovered is not usable, and the caller's
+  # gate drops it; that is strictly better than a confident wrong date, which
+  # is invisible to both exit codes and row counts.
+  as.Date(NA)
 }
 # reuse the package's content selectors (aspx/drupal/generic) to isolate the
 # release from archive-page nav clutter; strip_chrome (inside body_from_selectors)
@@ -121,6 +141,19 @@ is_listing <- function(x) {
 }                         # related-news sidebar has only a handful -> don't reject it
 extract <- function(html, url, ts = "") {
   doc <- tryCatch(read_html(html), error = function(e) NULL); if (is.null(doc)) return(NULL)
+  # xml_text() does NOT exclude <script>/<style> content -- it is a text node
+  # like any other -- so inline JS leaks into every extraction path below.
+  # This is usually cosmetic, but old Joomla nav-menu builders embed literal
+  # "Month DD, YYYY" strings as MENU ITEM LABELS ("Grants E-Newsletter
+  # February 6, 2013", linking to article id=301) inside a huge JS blob at the
+  # very top of the page -- on EVERY page of the site. Once TOPW was widened
+  # to reach real datelines on chrome-heavy templates, that same widening made
+  # this nav-menu date the first (and therefore winning) "dateline" found:
+  # mcintyre.house.gov stamped 494 of 538 unrelated releases (female-athletes
+  # honors, coastal policy, ...) all with 2013-02-06. Strip script/style once,
+  # up front, so no downstream path (selectors, main_content, <p> fallback,
+  # or the date search) can see it.
+  for (bad in xml_find_all(doc, "//script | //style")) xml_remove(bad)
   ttl <- xml_text(xml_find_first(doc, "//h1"))
   if (is.na(ttl) || !nzchar(trimws(ttl)) || nchar(ttl) > 300)
     ttl <- sub("\\s*[|].*$", "", xml_text(xml_find_first(doc, "//title")))
@@ -283,20 +316,40 @@ backfill_member <- function(M) {
   cf <- file.path(CACHE, paste0(gsub("[^a-z0-9]+", "_", tolower(M$name)), ".rds"))
   if (file.exists(cf)) return(readRDS(cf))
   arts <- cdx_articles(M$host)
-  if (is.null(arts) || !nrow(arts)) { saveRDS(data.table(), cf); return(data.table()) }
+  # A throttled CDX response is indistinguishable from an empty archive, and an
+  # empty MEMBER cache never retries -- that silently wrote off lantos once and
+  # then five batch-1 members (rahall/kanjorski/faleomavaega/bilirakis/payne).
+  # So an empty universe is never cached: a genuinely thin member re-checks CDX
+  # each run, which is nearly free because cdx_raw caches any non-empty universe.
+  if (is.null(arts) || !nrow(arts)) return(data.table())
   arts <- head(arts, MAXART); rows <- vector("list", nrow(arts))
+  # Count WHY candidates are dropped. Without this, "no date" and "fetch failed"
+  # and "not a release" all look identical -- a member can collapse from 851 rows
+  # to 9 and the run still reports success.
+  rej <- c(fetch = 0L, parse = 0L, nodate = 0L, body = 0L, other = 0L, soft404 = 0L)
   for (i in seq_len(nrow(arts))) {
     h <- tryCatch(resp_body_string(GET(sprintf("http://web.archive.org/web/%sid_/%s", arts$ts[i], arts$url[i]), 60)),
                   error = function(e) NA_character_)
     Sys.sleep(THROTTLE)
-    if (is.na(h) || nchar(h) < 800) next
-    ex <- extract(h, arts$url[i], arts$ts[i]); if (is.null(ex)) next
-    if (is.na(ex$date) || nchar(ex$body) < 300 || ex$n_dates > 6 || nchar(ex$title) < 1 || isTRUE(ex$listing)) next
+    if (is.na(h) || nchar(h) < 800) { rej["fetch"] <- rej["fetch"] + 1L; next }
+    ex <- extract(h, arts$url[i], arts$ts[i]); if (is.null(ex)) { rej["parse"] <- rej["parse"] + 1L; next }
+    # Each test must be NA-SAFE. These were once a single `||` chain whose
+    # short-circuit hid the NAs: `is.na(ex$date)` fired first and the rest were
+    # never evaluated. Split into separate counted tests, a title-less page
+    # reaches `nchar(NA_character_) < 1` -> NA -> `if (NA)` -> fatal, and the
+    # whole run dies mid-roster (it did, after 4 members). A missing title or
+    # date count is itself a reject, not an error.
+    if (is.na(ex$date))                         { rej["nodate"] <- rej["nodate"] + 1L; next }
+    if (is.na(ex$body) || nchar(ex$body) < 300) { rej["body"]   <- rej["body"]   + 1L; next }
+    if (is.na(ex$title) || nchar(ex$title) < 1 ||
+        is.na(ex$n_dates) || ex$n_dates > 6 || isTRUE(ex$listing)) {
+                                                  rej["other"]  <- rej["other"]  + 1L; next }
     # soft 404s: removed pages archived as HTTP-200 "Page Not Found" templates
     # (word-boundary-safe: a bare "error"/"not found" substring hits "tERRORist" etc.)
     if (grepl("^page not found$|^(404|file) not found|^error( [0-9]{3})?$", trimws(ex$title), ignore.case = TRUE) ||
         grepl("page (you requested )?(was |could )?not (be )?found|file you requested (was|could) not|sorry, the page",
-              substr(ex$body, 1, 300), ignore.case = TRUE)) next
+              substr(ex$body, 1, 300), ignore.case = TRUE)) {
+      rej["soft404"] <- rej["soft404"] + 1L; next }
     rows[[i]] <- data.table(date = ex$date, title = ex$title, body = ex$body, url = arts$url[i])
   }
   d <- rbindlist(rows)
@@ -315,7 +368,11 @@ backfill_member <- function(M) {
   if (nrow(d)) d[, `:=`(tags = NA_character_, cms = M$cms, name = M$name,
     state = M$state, district = as.character(M$district), party = M$party,
     committee = NA_character_, chamber = "house", source = "wayback")]
-  saveRDS(d, cf); cat(sprintf("  [%-22s] %-26s -> %d releases\n", M$name, M$host, nrow(d))); d
+  saveRDS(d, cf)
+  cat(sprintf("  [%-22s] %-26s -> %4d releases of %4d candidates | dropped: %s\n",
+              M$name, M$host, nrow(d), nrow(arts),
+              paste(names(rej)[rej > 0], rej[rej > 0], sep = "=", collapse = " ")))
+  d
 }
 
 message(sprintf("== Wayback backfill over %d verified targets ==", nrow(TARGETS)))
